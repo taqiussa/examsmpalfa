@@ -1,0 +1,43 @@
+<div id="tambah-user-form">
+        <form method="post" hx-post="/tambah-pengguna" hx-target="#tambah-user-form" hx-swap="outerHTML">
+                <div class="md:space-y-0 space-y-3 md:grid md:grid-cols-4 md:gap-3 mb-3">
+
+                        {% set input_label = "nama" %}
+                        {% set input_type = "text" %}
+                        {% set input_name = "name" %}
+                        {% set input_value = form_name %}
+                        {% set input_class = "input" %}
+                        {% set input_errors = form_errors %}
+                        {% include "components/input.html" %}
+
+                        {% set input_label = "username" %}
+                        {% set input_type = "text" %}
+                        {% set input_name = "username" %}
+                        {% set input_value = form_username %}
+                        {% set input_class = "input" %}
+                        {% set input_errors = form_errors %}
+                        {% include "components/input.html" %}
+
+                        {% set input_label = "password" %}
+                        {% set input_type = "password" %}
+                        {% set input_name = "password" %}
+                        {% set input_value = "" %}
+                        {% set input_class = "input" %}
+                        {% set input_errors = form_errors %}
+                        {% include "components/input.html" %}
+
+                        {% set input_label = "konfirmasi password" %}
+                        {% set input_type = "password" %}
+                        {% set input_name = "password_confirmation" %}
+                        {% set input_value = "" %}
+                        {% set input_class = "input" %}
+                        {% set input_errors = form_errors %}
+                        {% include "components/input.html" %}
+
+                </div>
+
+                <button type="submit" class="button">
+                        Simpan
+                </button>
+        </form>
+</div>

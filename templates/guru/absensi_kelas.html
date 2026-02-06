@@ -1,0 +1,38 @@
+{% extends "layouts/app.html" %}
+
+{% block content %}
+<div class="card space-y-6">
+
+        <h1 class="card-header">Absensi Kelas</h1>
+
+        <form id="absensi-filter" class="md:grid gap-4 md:grid-cols-5 space-y-2 md:space-y-0"
+                hx-get="/absensi-kelas/table" hx-target="#absensi-table"
+                hx-trigger="change from:input, change from:select" hx-push-url="true">
+
+                {% set input_label = "tanggal" %}
+                {% set input_type = "date" %}
+                {% set input_name = "tanggal" %}
+                {% set input_value = data.tanggal %}
+                {% set input_class = "input" %}
+                {% include "components/input.html" %}
+
+                {% include "components/tahun.html" %}
+                {% include "components/semester.html" %}
+                {% include "components/jam.html" %}
+                {% include "components/list-kelas.html" %}
+
+        </form>
+
+        <div class="flex items-center justify-between gap-3">
+                <button type="button" class="button" hx-post="/absensi-kelas/mark-all" hx-include="#absensi-filter"
+                        hx-target="#absensi-table" hx-swap="innerHTML">
+                        Set Kehadiran
+                </button>
+        </div>
+
+        <div class="overflow-x-auto" id="absensi-table"
+                hx-get="/absensi-kelas/table?tahun={{ data.tahun }}&semester={{ data.semester }}&kelas_id={{ data.kelas_id }}&tanggal={{ data.tanggal }}&jam={{ data.jam }}"
+                hx-trigger="load"></div>
+
+</div>
+{% endblock %}

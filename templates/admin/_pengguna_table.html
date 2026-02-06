@@ -1,0 +1,37 @@
+<div class="overflow-x-auto">
+        <table class="w-full border border-slate-200 rounded-md text-sm">
+                <thead class="bg-slate-100">
+                        <tr>
+                                <th class="border px-2 py-2 w-12">No.</th>
+                                <th class="border px-2 py-2 text-left">Nama</th>
+                                <th class="border px-2 py-2 text-left">Username</th>
+                                <th class="border px-2 py-2 w-24">Aksi</th>
+                        </tr>
+                </thead>
+                <tbody>
+                        {% for u in users %}
+                        <tr class="hover:bg-slate-50">
+                                <td class="border px-2 py-1 text-center">{{ loop.index }}</td>
+                                <td class="border px-2 py-1">{{ u.name }}</td>
+                                <td class="border px-2 py-1">{{ u.username }}</td>
+                                <td class="border px-2 py-1 text-center">
+                                        <form hx-post="/tambah-pengguna/delete" hx-target="#pengguna-table-wrap"
+                                                hx-swap="innerHTML">
+                                                <input type="hidden" name="id" value="{{ u.id }}">
+                                                <button type="submit" data-confirm="Hapus pengguna ini?"
+                                                        class="rounded-md bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100">
+                                                        Hapus
+                                                </button>
+                                        </form>
+                                </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                                <td colspan="4" class="border px-3 py-4 text-center text-slate-500">
+                                        Tidak ada data pengguna
+                                </td>
+                        </tr>
+                        {% endfor %}
+                </tbody>
+        </table>
+</div>

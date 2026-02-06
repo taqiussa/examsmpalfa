@@ -1,0 +1,63 @@
+<div class="flex flex-col gap-2 mt-4">
+
+        <div class="text-sm text-slate-600">
+                {{ pagination.start }}–{{ pagination.end }}
+                dari {{ pagination.total_rows }}
+        </div>
+
+        {% set current = pagination.page %}
+        {% set total = pagination.total_pages %}
+
+        <!-- mobile -->
+        <div class="flex md:hidden justify-between">
+
+                <button {% if current> 1 %}
+                        hx-get="{{ pagination_config.url }}?page={{ current - 1 }}{{ pagination_config.extra_query }}"
+                        hx-push-url="{{ pagination_config.history_url }}&page={{ current - 1 }}"
+                        hx-target="{{ pagination_config.target }}"
+                        {% endif %}
+                        class="px-3 py-1 border rounded disabled:opacity-40"
+                        {% if current == 1 %}disabled{% endif %}
+                        >
+                        ← Prev
+                </button>
+
+                <button {% if current < total %}
+                        hx-get="{{ pagination_config.url }}?page={{ current + 1 }}{{ pagination_config.extra_query }}"
+                        hx-push-url="{{ pagination_config.history_url }}&page={{ current + 1 }}"
+                        hx-target="{{ pagination_config.target }}" {% endif %}
+                        class="px-3 py-1 border rounded disabled:opacity-40" {% if current>= total %}disabled{% endif %}
+                        >
+                        Next →
+                </button>
+
+        </div>
+
+        <!-- desktop ellipsis -->
+        <div class="hidden md:flex gap-1 flex-wrap items-center">
+
+                {% set start = current - 2 %}
+                {% set end = current + 2 %}
+                {% if start < 1 %}{% set start=1 %}{% endif %} {% if end> total %}{% set end = total %}{% endif %}
+
+                        {% for p in range(start=1, end=total + 1) %}
+
+                        {% if p == 1 or p == total or (p >= start and p <= end) %} <button
+                                hx-get="{{ pagination_config.url }}?page={{ p }}{{ pagination_config.extra_query }}"
+                                hx-push-url="{{ pagination_config.history_url }}&page={{ p }}"
+                                hx-target="{{ pagination_config.target }}" class="px-2 py-1 border rounded
+                    {% if p == current %}bg-emerald-600 text-white{% endif %}">
+                                {{ p }}
+                                </button>
+
+                                {% elif p == start - 1 or p == end + 1 %}
+
+                                <span class="px-2">…</span>
+
+                                {% endif %}
+
+                                {% endfor %}
+
+        </div>
+
+</div>

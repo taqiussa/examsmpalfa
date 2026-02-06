@@ -1,0 +1,18 @@
+<div class="flex flex-col space-y-1 capitalize text-md text-slate-600">
+  <div>tahun</div>
+
+  {% set tahun_options = tahun_options() %}
+
+  <select name="tahun"
+    class="border p-2 rounded-md shadow-md shadow-emerald-400 border-slate-200 focus:ring focus:ring-emerald-300 focus:border-none bg-white">
+
+    <option value="">Pilih Tahun</option>
+
+    {% for opt in tahun_options %}
+    <option value="{{ opt.value }}" {% if data.tahun==opt.value %}selected{% endif %}>
+      {{ opt.label }}
+    </option>
+    {% endfor %}
+
+  </select>
+</div>

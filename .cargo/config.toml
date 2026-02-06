@@ -1,0 +1,5 @@
+[alias]
+# Run FE + BE together from repo root
+# Usage: cargo dev
+# (We avoid aliasing `watch` to not conflict with cargo-watch)
+dev = "run --bin watch"

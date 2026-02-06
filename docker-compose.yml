@@ -1,0 +1,23 @@
+services:
+  app:
+    image: taqiussa/sikadusmpmifdarust:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sikadusmpmifdarust
+    restart: unless-stopped
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      APP_PORT: ${APP_PORT:-3030}
+      DATABASE_URL: ${DATABASE_URL}
+    pull_policy: ${PULL_POLICY:-if_not_present}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - proxy_network
+    ports:
+      - "8950:${APP_PORT}"
+
+networks:
+  proxy_network:
+    external: true

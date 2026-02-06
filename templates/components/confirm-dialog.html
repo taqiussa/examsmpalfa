@@ -1,0 +1,71 @@
+<div
+  id="confirm-dialog"
+  class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 px-4 opacity-0 transition-opacity duration-200"
+  aria-live="polite"
+  aria-busy="true"
+>
+  <div class="w-full max-w-sm rounded-xl bg-white p-4 shadow-xl">
+    <div class="text-sm font-semibold text-slate-800" id="confirm-dialog-title">Konfirmasi</div>
+    <div class="mt-2 text-sm text-slate-600" id="confirm-dialog-message">
+      Apakah Anda yakin?
+    </div>
+    <div class="mt-4 flex justify-end gap-2">
+      <button type="button" id="confirm-dialog-cancel"
+        class="rounded-md border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50">
+        Batal
+      </button>
+      <button type="button" id="confirm-dialog-confirm"
+        class="rounded-md bg-rose-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-rose-700">
+        Hapus
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    const dialog = document.getElementById("confirm-dialog");
+    const messageEl = document.getElementById("confirm-dialog-message");
+    const btnCancel = document.getElementById("confirm-dialog-cancel");
+    const btnConfirm = document.getElementById("confirm-dialog-confirm");
+    let pendingForm = null;
+
+    function open(message, form, confirmText) {
+      pendingForm = form;
+      messageEl.textContent = message || "Apakah Anda yakin?";
+      if (confirmText) btnConfirm.textContent = confirmText;
+      dialog.classList.remove("hidden");
+      dialog.classList.add("flex");
+      requestAnimationFrame(() => dialog.classList.remove("opacity-0"));
+    }
+
+    function close() {
+      dialog.classList.add("opacity-0");
+      setTimeout(() => {
+        dialog.classList.add("hidden");
+        dialog.classList.remove("flex");
+        btnConfirm.textContent = "Hapus";
+        pendingForm = null;
+      }, 200);
+    }
+
+    document.addEventListener("click", function (event) {
+      const trigger = event.target.closest("[data-confirm]");
+      if (!trigger) return;
+      event.preventDefault();
+      const form = trigger.closest("form");
+      if (!form) return;
+      open(trigger.getAttribute("data-confirm"), form, trigger.getAttribute("data-confirm-text"));
+    });
+
+    btnCancel.addEventListener("click", close);
+    dialog.addEventListener("click", (event) => {
+      if (event.target === dialog) close();
+    });
+
+    btnConfirm.addEventListener("click", () => {
+      if (pendingForm) pendingForm.requestSubmit();
+      close();
+    });
+  })();
+</script>

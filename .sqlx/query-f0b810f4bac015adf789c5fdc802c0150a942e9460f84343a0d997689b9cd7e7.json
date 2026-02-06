@@ -1,0 +1,12 @@
+{
+  "db_name": "MySQL",
+  "query": "\n            INSERT INTO absensis (tanggal, tahun, semester, jam, kelas_id, nis, kehadiran_id, created_at, updated_at)\n            VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 7
+    },
+    "nullable": []
+  },
+  "hash": "f0b810f4bac015adf789c5fdc802c0150a942e9460f84343a0d997689b9cd7e7"
+}

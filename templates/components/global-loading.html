@@ -1,0 +1,15 @@
+<div
+  id="global-loading"
+  hx-preserve
+  class="fixed inset-0 z-50 hidden items-center justify-center bg-black/30 px-4 opacity-0 transition-opacity duration-200"
+  aria-live="polite"
+  aria-busy="true"
+>
+  <div class="flex flex-col items-center gap-4 rounded-2xl bg-white/95 px-6 py-5 shadow-xl">
+    <div class="relative h-14 w-14">
+      <div class="absolute inset-0 rounded-full border-4 border-emerald-200"></div>
+      <div class="absolute inset-0 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent"></div>
+    </div>
+    <div class="text-sm font-semibold text-gray-700">Memuat data...</div>
+  </div>
+</div>

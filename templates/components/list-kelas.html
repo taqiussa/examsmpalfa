@@ -1,0 +1,25 @@
+<div class="flex flex-col space-y-1 capitalize text-md text-slate-600">
+        <div>kelas</div>
+
+        <select name="kelas_id"
+                class="border p-2 bg-white rounded-md shadow-md shadow-emerald-400 border-slate-200 focus:ring focus:ring-emerald-300 focus:border-none">
+
+                {% set require_kelas = data.require_kelas | default(value=false) %}
+                {% if require_kelas %}
+                <option value="" {% if data.kelas_id==0 %}selected{% endif %}>
+                        Pilih Kelas
+                </option>
+                {% else %}
+                <option value="0" {% if data.kelas_id==0 %}selected{% endif %}>
+                        Semua Kelas
+                </option>
+                {% endif %}
+
+                {% for k in data.list_kelas %}
+                <option value="{{ k.id }}" {% if data.kelas_id==k.id %}selected{% endif %}>
+                        {{ k.nama }}
+                </option>
+                {% endfor %}
+
+        </select>
+</div>

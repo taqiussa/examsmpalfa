@@ -1,0 +1,48 @@
+<table class="w-full border border-slate-200 rounded-md text-sm">
+        <thead class="bg-slate-100">
+                <tr>
+                        <th class="border px-2 py-2 w-12 text-center">No.</th>
+                        <th class="border px-2 py-2">NIS</th>
+                        <th class="border px-2 py-2">Nama</th>
+                        <th class="border px-2 py-2">Kelas</th>
+                        <th class="border px-2 py-2">Tingkat</th>
+                        <th class="border px-2 py-2">TTL</th>
+                        <th class="border px-2 py-2">Ayah</th>
+                        <th class="border px-2 py-2">Ibu</th>
+                        <th class="border px-2 py-2">Alamat</th>
+                        <th class="border px-2 py-2">Telepon</th>
+                </tr>
+        </thead>
+
+        <tbody>
+                {% for s in rows %}
+                <tr class="hover:bg-slate-50">
+                        <td class="border px-2 py-1 text-center">
+                                {{ pagination.start + loop.index0 }}
+                        </td>
+                        <td class="border px-2 py-1">{{ s.nis | default(value="-") }}</td>
+                        <td class="border px-2 py-1">{{ s.nama | default(value="-") }}</td>
+                        <td class="border px-2 py-1">{{ s.kelas | default(value="-") }}</td>
+                        <td class="border px-2 py-1">{{ s.tingkat | default(value="-") }}</td>
+                        <td class="border px-2 py-1">
+                                {{ s.tempat_lahir | default(value="-") }},
+                                {{ s.tanggal_lahir | default(value="-") }}
+                        </td>
+                        <td class="border px-2 py-1">{{ s.nama_ayah | default(value="-") }}</td>
+                        <td class="border px-2 py-1">{{ s.nama_ibu | default(value="-") }}</td>
+                        <td class="border px-2 py-1">{{ s.alamat | default(value="-") }}</td>
+                        <td class="border px-2 py-1">{{ s.telepon | default(value="-") }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                        <td colspan="10" class="border px-3 py-4 text-center text-slate-500">
+                                Tidak ada data siswa
+                        </td>
+                </tr>
+                {% endfor %}
+        </tbody>
+</table>
+
+<!-- Pagination -->
+
+{% include "components/pagination.html" %}

@@ -1,0 +1,12 @@
+{
+  "db_name": "MySQL",
+  "query": "\n            UPDATE absensis\n            SET kehadiran_id = ?, updated_at = NOW()\n            WHERE id = ?\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "60a9dc033337aa2cb0b423b97f7902bfb70b66a946a4bbe4c07b825589cf0ded"
+}

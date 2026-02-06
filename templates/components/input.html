@@ -1,0 +1,16 @@
+{% set input_label = label | default(value=input_label | default(value="")) %}
+{% set input_type = type | default(value=input_type | default(value="text")) %}
+{% set input_name = name | default(value=input_name | default(value="")) %}
+{% set input_value = value | default(value=input_value | default(value="")) %}
+{% set input_class = class | default(value=input_class | default(value="border p-2 rounded-md shadow-md shadow-emerald-400 border-slate-200 focus:border-none focus:ring focus:ring-emerald-300")) %}
+{% set input_errors = errors | default(value=input_errors | default(value=false)) %}
+
+<div class="flex flex-col space-y-1 capitalize text-md text-slate-600">
+  {% if input_label != "" %}
+  <div>{{ input_label }}</div>
+  {% endif %}
+  <input type="{{ input_type }}" name="{{ input_name }}" value="{{ input_value }}" class="{{ input_class }}">
+  {% if input_errors and input_name != "" and input_errors[input_name] is defined %}
+  <span class="text-xs text-red-400">{{ input_errors[input_name] }}</span>
+  {% endif %}
+</div>

@@ -1,0 +1,14 @@
+.git
+.gitignore
+.env
+.env.*
+target
+node_modules
+fe/node_modules
+static
+fe/dist
+fe/.vite
+**/*.log
+Dockerfile
+docker-compose.yml
+README.md

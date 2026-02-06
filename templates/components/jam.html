@@ -1,0 +1,12 @@
+<div class="flex flex-col space-y-1 capitalize text-md text-slate-600">
+  <div>jam</div>
+
+  <select name="jam"
+    class="border p-2 rounded-md shadow-md shadow-emerald-400 border-slate-200 focus:ring focus:ring-emerald-300 focus:border-none bg-white">
+    <option value="" disabled {% if data.jam == "" %}selected{% endif %}>Pilih Jam</option>
+    <option value="1-2" {% if data.jam=="1-2" %}selected{% endif %}>1-2</option>
+    <option value="3-4" {% if data.jam=="3-4" %}selected{% endif %}>3-4</option>
+    <option value="5-6" {% if data.jam=="5-6" %}selected{% endif %}>5-6</option>
+    <option value="7-8" {% if data.jam=="7-8" %}selected{% endif %}>7-8</option>
+  </select>
+</div>

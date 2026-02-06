@@ -1,0 +1,12 @@
+{
+  "db_name": "MySQL",
+  "query": "\n        INSERT INTO absensis (tanggal, tahun, semester, jam, kelas_id, nis, kehadiran_id, user_id, created_at, updated_at)\n        SELECT ?, ?, ?, ?, s.kelas_id, s.nis, 1, ?, NOW(), NOW()\n        FROM siswas s\n        WHERE s.tahun = ?\n          AND (? = 0 OR s.kelas_id = ?)\n          AND NOT EXISTS (\n            SELECT 1\n            FROM absensis a\n            WHERE a.tahun = ?\n              AND a.semester = ?\n              AND a.kelas_id = s.kelas_id\n              AND a.tanggal = ?\n              AND a.jam = ?\n          )\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 12
+    },
+    "nullable": []
+  },
+  "hash": "d0437057efd3938966a0181f169d1c620a380d72dd22b06936af5890e006c592"
+}

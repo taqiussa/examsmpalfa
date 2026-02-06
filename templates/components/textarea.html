@@ -1,0 +1,20 @@
+{% set textarea_label = label | default(value="") %}
+{% set textarea_name = name | default(value="") %}
+{% set textarea_value = value | default(value="") %}
+{% set textarea_rows = rows | default(value=3) %}
+{% set textarea_class = class | default(value="border p-2 rounded-md shadow-md shadow-emerald-400 border-slate-200 focus:ring focus:ring-emerald-300") %}
+{% set textarea_errors = errors | default(value=textarea_errors | default(value=false)) %}
+
+<div class="flex flex-col space-y-1 capitalize text-md text-slate-600">
+  {% if textarea_label != "" %}
+  <div>{{ textarea_label }}</div>
+  {% endif %}
+  <textarea
+    name="{{ textarea_name }}"
+    rows="{{ textarea_rows }}"
+    class="{{ textarea_class }}"
+  >{{ textarea_value }}</textarea>
+  {% if textarea_errors and textarea_name != "" and textarea_errors[textarea_name] is defined %}
+  <span class="text-xs text-red-400">{{ textarea_errors[textarea_name] }}</span>
+  {% endif %}
+</div>

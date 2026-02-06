@@ -1,0 +1,59 @@
+<div class="h-full flex flex-col">
+
+  <!-- USER -->
+  <div class="flex flex-col items-center py-6 border-b flex-shrink-0">
+
+    {% if layout.user %}
+    {% if layout.user.foto %}
+    <img src="https://is3.cloudhost.id/alfa/smpmifda/foto/{{ layout.user.foto }}"
+      class="w-24 h-24 rounded-full border object-cover" />
+    {% else %}
+    <div class="w-32 h-32 rounded-full  text-emerald-400 flex items-center justify-center">
+      <svg class="w-32 h-32 text-emerald-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24"
+        height="24" fill="none" viewBox="0 0 24 24">
+        <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0 0a8.949 8.949 0 0 0 4.951-1.488A3.987 3.987 0 0 0 13 16h-2a3.987 3.987 0 0 0-3.951 3.512A8.948 8.948 0 0 0 12 21Zm3-11a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+      </svg>
+    </div>
+    {% endif %}
+
+    <div class="mt-2 font-bold">{{ layout.user.name }}</div>
+    {% endif %}
+
+  </div>
+
+  <!-- MENU -->
+  <nav class="flex-1 overflow-y-auto min-h-0 p-3 space-y-1">
+
+    {% for item in layout.sidebar %}
+
+    {% if item.kind == "header" %}
+    <div class="text-xs font-bold text-gray-400 pt-4">
+      {{ item.label }}
+    </div>
+
+    {% else %}
+    <a @click="sidebarOpen = false" href="{{ item.href }}" hx-boost="true" class="block w-full px-3 py-2 rounded-md text-sm font-medium transition
+       {% if item.active %}
+         bg-emerald-100 text-emerald-700
+       {% else %}
+         text-gray-600 hover:bg-gray-100
+       {% endif %}">
+      {{ item.label }}
+    </a>
+    {% endif %}
+
+    {% endfor %}
+
+  </nav>
+
+  <!-- LOGOUT -->
+  <div class="p-4 border-t flex-shrink-0">
+    <form method="get" action="/logout">
+      <button class="w-full text-left text-red-600 hover:bg-red-50 px-3 py-2 rounded">
+        Logout
+      </button>
+    </form>
+  </div>
+
+</div>

@@ -1,0 +1,14 @@
+{% extends "layouts/app.html" %} {% block content %}
+<div class="flex flex-col items-center justify-center min-h-[60vh] text-center">
+  <h1 class="text-6xl font-bold text-gray-800">404</h1>
+
+  <p class="mt-4 text-xl font-semibold text-gray-700">
+    Halaman tidak ditemukan
+  </p>
+
+  <a hx-boost="true" href="/dashboard"
+    class="mt-6 inline-flex items-center px-4 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700 transition">
+    Kembali ke Dashboard
+  </a>
+</div>
+{% endblock %}

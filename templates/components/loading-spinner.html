@@ -1,0 +1,96 @@
+<!-- Full page loading spinner with semi-transparent background -->
+<div
+  id="global-loading"
+  class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/30 transition-opacity duration-300 hidden"
+  x-data="{ show: false }"
+  x-show="show"
+  x-transition:enter="transition ease-out duration-300"
+  x-transition:enter-start="opacity-0"
+  x-transition:enter-end="opacity-100"
+  x-transition:leave="transition ease-in duration-200"
+  x-transition:leave-start="opacity-100"
+  x-transition:leave-end="opacity-0"
+>
+  <!-- Spinner container dengan flex column untuk posisi sempurna di tengah -->
+  <div class="flex flex-col items-center justify-center">
+    <!-- Relative container untuk spinner -->
+    <div class="relative">
+      <!-- Outer ring -->
+      <div class="w-16 h-16 border-4 border-gray-300 rounded-full"></div>
+
+      <!-- Spinning ring -->
+      <div
+        class="absolute top-0 left-0 w-16 h-16 border-4 border-slate-400 border-t-transparent rounded-full animate-spin"
+      ></div>
+    </div>
+
+    <!-- Text di bawah spinner dengan spacing yang pas -->
+    <div class="mt-4 text-center">
+      <p class="text-white font-medium drop-shadow-lg">Memuat Data...</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Global loading functions
+  window.showLoading = function () {
+    const spinner = document.getElementById("global-loading");
+    if (spinner) {
+      spinner.classList.remove("hidden");
+      // For Alpine.js components
+      if (spinner._x_dataStack) {
+        spinner._x_dataStack[0].show = true;
+      }
+    }
+  };
+
+  window.hideLoading = function () {
+    const spinner = document.getElementById("global-loading");
+    if (spinner) {
+      // Wait for fade out
+      spinner.classList.add("opacity-0");
+      setTimeout(() => {
+        spinner.classList.add("hidden");
+        spinner.classList.remove("opacity-0");
+        // For Alpine.js components
+        if (spinner._x_dataStack) {
+          spinner._x_dataStack[0].show = false;
+        }
+      }, 300);
+    }
+  };
+
+  // Auto-show on HTMX requests
+  document.addEventListener("DOMContentLoaded", function () {
+    if (window.htmx) {
+      // Show on request start
+      document.body.addEventListener("htmx:beforeRequest", function () {
+        window.showLoading();
+      });
+
+      // Hide on request complete
+      document.body.addEventListener("htmx:afterRequest", function () {
+        window.hideLoading();
+      });
+
+      // Hide on error too
+      document.body.addEventListener("htmx:responseError", function () {
+        window.hideLoading();
+      });
+    }
+  });
+</script>
+
+<style>
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  .animate-spin {
+    animation: spin 1s linear infinite;
+  }
+</style>
