@@ -1,0 +1,34 @@
+{% extends "layouts/app.html" %}
+
+{% block content %}
+<div class="card space-y-6">
+
+        <div class="flex items-center justify-between">
+                <h1 class="card-header">Daftar Ujian</h1>
+                <a href="/ujian/create" class="button bg-emerald-600 text-white hover:bg-emerald-700">
+                        + Buat Ujian Baru
+                </a>
+        </div>
+
+        <!-- Filter Form -->
+        <form id="ujian-filter" class="md:grid gap-4 md:grid-cols-3 space-y-2 md:space-y-0" hx-get="/ujian/table"
+                hx-target="#ujian-table" hx-trigger="change from:input, change from:select, keyup delay:300ms"
+                hx-push-url="true">
+
+                {% include "components/tahun.html" %}
+
+                <div class="flex flex-col space-y-1 capitalize text-md text-slate-600 col-span-2">
+
+                        <label class="text-sm text-slate-600">Cari</label>
+                        <input type="text" name="search" value="{{ filter_search | default(value="") }}"
+                                placeholder="Cari berdasarkan judul atau deskripsi..." class="input"
+                                hx-get="/ujian/table" hx-target="#ujian-table" hx-trigger="keyup delay:300ms">
+                </div>
+
+        </form>
+
+        <!-- Table Container -->
+        <div id="ujian-table" hx-get="/ujian/table?tahun={{ data.tahun }}" hx-trigger="load"></div>
+
+</div>
+{% endblock %}

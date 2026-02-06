@@ -1,0 +1,75 @@
+<table class="w-full border border-slate-200 rounded-md text-sm">
+        <thead class="bg-slate-100">
+                <tr>
+                        <th class="border px-2 py-2 w-12">No.</th>
+                        <th class="border px-2 py-2 text-left">Judul Ujian</th>
+                        <th class="border px-2 py-2 text-left">Tanggal</th>
+                        <th class="border px-2 py-2 text-center">Waktu</th>
+                        <th class="border px-2 py-2 text-center">Soal</th>
+                        <th class="border px-2 py-2 text-center">Status</th>
+                        <th class="border px-2 py-2 text-center">Aksi</th>
+                </tr>
+        </thead>
+
+        <tbody>
+                {% if list_ujian | length == 0 %}
+                <tr>
+                        <td colspan="7" class="border px-3 py-8 text-center text-slate-500">
+                                {% if filter_search and filter_search != "" %}
+                                Tidak ada ujian yang sesuai dengan pencarian "{{ filter_search }}"
+                                {% else %}
+                                Belum ada ujian yang dibuat
+                                {% endif %}
+                        </td>
+                </tr>
+                {% else %}
+                {% for u in list_ujian %}
+                <tr class="hover:bg-slate-50">
+                        <td class="border px-2 py-2 text-center">{{ loop.index }}</td>
+                        <td class="border px-2 py-2">
+                                <div class="font-medium">{{ u.title | default(value="-") }}</div>
+                                {% if u.description %}
+                                <div class="text-xs text-slate-500 mt-1 truncate max-w-xs">{{ u.description }}</div>
+                                {% endif %}
+                        </td>
+                        <td class="border px-2 py-2 text-center">
+                                {{ u.tanggal | default(value="-") }}
+                        </td>
+                        <td class="border px-2 py-2 text-center">
+                                {{ u.waktu_menit | default(value=0) }} menit
+                        </td>
+                        <td class="border px-2 py-2 text-center">
+                                {{ u.total_soal | default(value=0) }} soal
+                        </td>
+                        <td class="border px-2 py-2 text-center">
+                                {% if u.is_active %}
+                                <span class="px-2 py-1 rounded-full text-xs bg-emerald-100 text-emerald-700">
+                                        Aktif
+                                </span>
+                                {% else %}
+                                <span class="px-2 py-1 rounded-full text-xs bg-slate-100 text-slate-600">
+                                        Nonaktif
+                                </span>
+                                {% endif %}
+                        </td>
+                        <td class="border px-2 py-2 text-center">
+                                <div class="flex items-center justify-center gap-2">
+                                        <a href="/ujian/{{ u.id }}"
+                                                class="text-sky-600 hover:text-sky-800 text-sm font-medium">
+                                                Lihat
+                                        </a>
+                                        <button type="button"
+                                                class="text-rose-600 hover:text-rose-800 text-sm font-medium"
+                                                hx-delete="/ujian/{{ u.id }}" hx-target="closest tr"
+                                                hx-swap="outerHTML swap:0.5s"
+                                                hx-confirm="Apakah Anda yakin ingin menghapus ujian ini? Semua soal juga akan dihapus."
+                                                data-title="Hapus Ujian" data-cancel="Batal" data-confirm="Hapus">
+                                                Hapus
+                                        </button>
+                                </div>
+                        </td>
+                </tr>
+                {% endfor %}
+                {% endif %}
+        </tbody>
+</table>

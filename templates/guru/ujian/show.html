@@ -1,0 +1,129 @@
+{% extends "layouts/app.html" %}
+
+{% block content %}
+<div class="card space-y-6">
+
+        <!-- Header -->
+        <div class="flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                        <a href="/ujian" class="text-slate-500 hover:text-slate-700">
+                                ← Kembali
+                        </a>
+                        <div>
+                                <h1 class="text-xl font-semibold">{{ data.ujian.title }}</h1>
+                                {% if data.ujian.description %}
+                                <p class="text-sm text-slate-500 mt-1">{{ data.ujian.description }}</p>
+                                {% endif %}
+                        </div>
+                </div>
+                <div class="flex items-center gap-3">
+                        {% if data.ujian.is_active %}
+                        <span class="px-3 py-1 rounded-full text-sm bg-emerald-100 text-emerald-700">
+                                Aktif
+                        </span>
+                        {% else %}
+                        <span class="px-3 py-1 rounded-full text-sm bg-slate-100 text-slate-600">
+                                Nonaktif
+                        </span>
+                        {% endif %}
+                </div>
+        </div>
+
+        <!-- Info Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="bg-white border border-slate-200 rounded-lg p-4">
+                        <div class="text-sm text-slate-500">Tanggal</div>
+                        <div class="font-semibold text-lg">{{ data.ujian.tanggal | date(format="%Y-%m-%d") }}</div>
+                </div>
+                <div class="bg-white border border-slate-200 rounded-lg p-4">
+                        <div class="text-sm text-slate-500">Waktu</div>
+                        <div class="font-semibold text-lg">{{ data.ujian.waktu_menit }} menit</div>
+                </div>
+                <div class="bg-white border border-slate-200 rounded-lg p-4">
+                        <div class="text-sm text-slate-500">Jumlah Soal</div>
+                        <div class="font-semibold text-lg">{{ data.ujian.total_soal }} soal</div>
+                </div>
+        </div>
+
+        <!-- Actions -->
+        {% if data.can_add_soal %}
+        <div class="flex items-center justify-between">
+                <h2 class="text-lg font-semibold">Daftar Soal</h2>
+                <a href="/ujian/{{ data.ujian.id }}/soal/create" class="button bg-sky-600 text-white hover:bg-sky-700">
+                        + Tambah Soal
+                </a>
+        </div>
+        {% endif %}
+
+        <!-- Questions List -->
+        <div class="space-y-4">
+                {% if data.list_soal | length == 0 %}
+                <div class="text-center py-12 bg-slate-50 rounded-lg border border-dashed border-slate-300">
+                        <div class="text-slate-500 mb-4">Belum ada soal dalam ujian ini</div>
+                        {% if data.can_add_soal %}
+                        <a href="/ujian/{{ data.ujian.id }}/soal/create"
+                                class="button bg-sky-600 text-white hover:bg-sky-700">
+                                + Tambah Soal Pertama
+                        </a>
+                        {% endif %}
+                </div>
+                {% else %}
+                {% for s in data.list_soal %}
+                <div class="bg-white border border-slate-200 rounded-lg p-4">
+                        <div class="flex items-start justify-between gap-4">
+                                <div class="flex-1">
+                                        <div class="flex items-center gap-2 mb-2">
+                                                <span
+                                                        class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-sm font-medium">
+                                                        No. {{ loop.index }}
+                                                </span>
+                                                {% if s.kategori %}
+                                                <span class="text-xs text-slate-500">{{ s.kategori }}</span>
+                                                {% endif %}
+                                                <span class="text-xs text-slate-500">Bobot: {{ s.bobot_nilai |
+                                                        default(value=1) }}</span>
+                                        </div>
+                                        <div class="prose prose-sm max-w-none mb-4">
+                                                {{ s.pertanyaan | safe }}
+                                        </div>
+                                        <div class="grid grid-cols-2 gap-2 text-sm">
+                                                <div class="flex items-center gap-2">
+                                                        <span
+                                                                class="w-6 h-6 rounded bg-slate-100 flex items-center justify-center text-xs font-medium {% if s.kunci_jawaban == 'a' %}bg-emerald-500 text-white{% endif %}">A</span>
+                                                        <span>{{ s.opsi_a | safe }}</span>
+                                                </div>
+                                                <div class="flex items-center gap-2">
+                                                        <span
+                                                                class="w-6 h-6 rounded bg-slate-100 flex items-center justify-center text-xs font-medium {% if s.kunci_jawaban == 'b' %}bg-emerald-500 text-white{% endif %}">B</span>
+                                                        <span>{{ s.opsi_b | safe }}</span>
+                                                </div>
+                                                {% if s.opsi_c %}
+                                                <div class="flex items-center gap-2">
+                                                        <span
+                                                                class="w-6 h-6 rounded bg-slate-100 flex items-center justify-center text-xs font-medium {% if s.kunci_jawaban == 'c' %}bg-emerald-500 text-white{% endif %}">C</span>
+                                                        <span>{{ s.opsi_c | safe }}</span>
+                                                </div>
+                                                {% endif %}
+                                                {% if s.opsi_d %}
+                                                <div class="flex items-center gap-2">
+                                                        <span
+                                                                class="w-6 h-6 rounded bg-slate-100 flex items-center justify-center text-xs font-medium {% if s.kunci_jawaban == 'd' %}bg-emerald-500 text-white{% endif %}">D</span>
+                                                        <span>{{ s.opsi_d | safe }}</span>
+                                                </div>
+                                                {% endif %}
+                                        </div>
+                                </div>
+                                <button type="button" class="text-rose-600 hover:text-rose-800 p-2"
+                                        hx-delete="/ujian/{{ data.ujian.id }}/soal/{{ s.id }}" hx-target="closest div"
+                                        hx-swap="outerHTML swap:0.5s"
+                                        hx-confirm="Apakah Anda yakin ingin menghapus soal ini?" title="Hapus Soal">
+                                        🗑️
+                                </button>
+                        </div>
+                </div>
+                {% endfor %}
+                {% endif %}
+        </div>
+
+</div>
+{% endblock %}

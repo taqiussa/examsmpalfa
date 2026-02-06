@@ -15,5 +15,11 @@ pub fn menu(current_path: &str) -> Vec<SidebarItem> {
             label: "Absensi Kelas",
             active: is_active(current_path, "/absensi-kelas"),
         },
+        SidebarItem {
+            kind: "link",
+            href: "/ujian",
+            label: "Buat Ujian",
+            active: is_active(current_path, "/ujian"),
+        },
     ]
 }
