@@ -118,8 +118,8 @@ Ada dua cara deploy:
 #### Opsi A: Pull Image (Direkomendasikan)
 1. **Build & Push image (di lokal/CI)**
 ```bash
-docker build -t yourdockerhubuser/sikadusmpmifda:latest .
-docker push yourdockerhubuser/sikadusmpmifda:latest
+docker build -t yourdockerhubuser/examsmkmifda:latest .
+docker push yourdockerhubuser/examsmkmifda:latest
 ```
 
 2. **Siapkan `.env.prod` di server**
@@ -128,7 +128,7 @@ Contoh isi:
 ```
 APP_ENV=production
 APP_PORT=3000
-DATABASE_URL=mysql://user:pass@mariadb:3306/sikadusmpmifda
+DATABASE_URL=mysql://user:pass@mariadb:3306/examsmkmifda
 ```
 
 3. **Pull & Run di server**
@@ -157,7 +157,7 @@ docker compose --env-file .env.prod up -d --build
 Build image **tidak butuh koneksi DB** jika `.sqlx/` sudah ada dan `SQLX_OFFLINE=true` dipakai.  
 Jalankan ini di lokal/CI setiap kali query SQL berubah:
 ```bash
-DATABASE_URL="mysql://user:pass@host:3306/db" cargo sqlx prepare -- --bin sikadusmpmifda
+DATABASE_URL="mysql://user:pass@host:3306/db" cargo sqlx prepare -- --bin examsmkmifda
 ```
 
 ### 3. Henti Services

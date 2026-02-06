@@ -41,7 +41,7 @@ struct AbsensiRow {
     nis: Option<String>,
     nama: Option<String>,
     kelas: Option<String>,
-    kehadiran_id: Option<i64>,
+    kehadiran_id: Option<i32>,
     absensi_id: Option<i64>,
     guru_nama: Option<String>,
 }
@@ -356,16 +356,16 @@ where
 #[cfg(test)]
 mod tests {
     use super::{
-        absensi_kelas, absensi_kelas_update, empty_string_as_none_i32, empty_string_as_none_string,
-        normalize_filter, AbsensiFilter, AbsensiUpdateForm, Htmx,
+        AbsensiFilter, AbsensiUpdateForm, Htmx, absensi_kelas, absensi_kelas_update,
+        empty_string_as_none_i32, empty_string_as_none_string, normalize_filter,
     };
     use crate::{
         models::{auth_user::AuthUser, role::Role},
         utils::page_context::PageContext,
     };
-    use axum::{Extension, Form};
     use axum::http::Uri;
     use axum::response::IntoResponse;
+    use axum::{Extension, Form};
     use chrono::Local;
     use serial_test::serial;
 
@@ -418,13 +418,10 @@ mod tests {
             jam: "1".into(),
         };
 
-        let response = absensi_kelas_update(
-            Htmx(true),
-            Extension(test_db.pool.clone()),
-            Form(payload),
-        )
-        .await
-        .into_response();
+        let response =
+            absensi_kelas_update(Htmx(true), Extension(test_db.pool.clone()), Form(payload))
+                .await
+                .into_response();
 
         assert_eq!(response.status(), axum::http::StatusCode::OK);
 
@@ -445,12 +442,9 @@ mod tests {
         };
         crate::test_support::seed_base_data(&test_db.pool).await;
 
-        let response = absensi_kelas(
-            base_ctx(),
-            Extension(test_db.pool.clone()),
-        )
-        .await
-        .into_response();
+        let response = absensi_kelas(base_ctx(), Extension(test_db.pool.clone()))
+            .await
+            .into_response();
 
         assert_eq!(response.status(), axum::http::StatusCode::OK);
         test_db.teardown().await;
@@ -472,8 +466,19 @@ mod tests {
     #[tokio::test]
     async fn render_table_short_circuits_without_kelas_or_jam() {
         let ctx = base_ctx();
-        let html = super::render_table(&ctx, &sqlx::MySqlPool::connect_lazy("mysql://user:pass@localhost/db").unwrap(), "2024 / 2025", 1, 0, "2024-01-01", "")
-            .await;
-        assert!(html.contains("Pilih kelas terlebih dahulu") || html.contains("Pilih jam terlebih dahulu"));
+        let html = super::render_table(
+            &ctx,
+            &sqlx::MySqlPool::connect_lazy("mysql://user:pass@localhost/db").unwrap(),
+            "2024 / 2025",
+            1,
+            0,
+            "2024-01-01",
+            "",
+        )
+        .await;
+        assert!(
+            html.contains("Pilih kelas terlebih dahulu")
+                || html.contains("Pilih jam terlebih dahulu")
+        );
     }
 }

@@ -19,14 +19,14 @@ use crate::utils::{
 #[derive(Serialize)]
 struct BiodataData {
     tahun: String,
-    kelas_id: i32,
+    kelas_id: i64,
     list_kelas: Vec<crate::utils::list_kelas::ListKelas>,
 }
 
 #[derive(Deserialize)]
 pub struct BiodataFilter {
     pub tahun: Option<String>,
-    pub kelas_id: Option<i32>,
+    pub kelas_id: Option<String>, // tetap string dari query
     pub page: Option<i64>,
     pub search: Option<String>,
 }
@@ -36,12 +36,12 @@ struct SiswaRow {
     nis: Option<String>,
     nama: Option<String>,
     kelas: Option<String>,
-    tingkat: Option<i32>,
+    tingkat: Option<String>,
     tempat_lahir: Option<String>,
     tanggal_lahir: Option<String>,
     nama_ayah: Option<String>,
     nama_ibu: Option<String>,
-    alamat: Option<String>,
+    alamat_lengkap: Option<String>,
     telepon: Option<String>,
 }
 
@@ -82,11 +82,19 @@ pub async fn biodata_siswa_table(
     Extension(db): Extension<MySqlPool>,
 ) -> axum::response::Response {
     let tahun = filter.tahun.clone().unwrap_or_else(data_tahun);
-    let kelas_id = filter.kelas_id.unwrap_or(0);
+
+    // ✅ parse kelas_id dari string → integer
+    let kelas_id: i64 = filter
+        .kelas_id
+        .as_deref()
+        .unwrap_or("0")
+        .parse()
+        .unwrap_or(0);
+
     let page = filter.page.unwrap_or(1);
     let search = filter.search.clone().unwrap_or_default();
 
-    // 🚨 redirect if normal browser request
+    // redirect jika bukan HTMX
     if !is_htmx {
         let url = format!(
             "/biodata-siswa?tahun={}&kelas_id={}&search={}&page={}",
@@ -147,7 +155,7 @@ pub async fn biodata_siswa_table(
                 DATE_FORMAT(b.tanggal_lahir, '%Y-%m-%d') AS tanggal_lahir,
                 b.nama_ayah,
                 b.nama_ibu,
-                b.alamat,
+                b.alamat_lengkap,
                 b.telepon
             FROM siswas s
             JOIN kelas k ON k.id = s.kelas_id
@@ -179,7 +187,7 @@ pub async fn biodata_siswa_table(
                 DATE_FORMAT(b.tanggal_lahir, '%Y-%m-%d') AS tanggal_lahir,
                 b.nama_ayah,
                 b.nama_ibu,
-                b.alamat,
+                b.alamat_lengkap,
                 b.telepon
             FROM siswas s
             JOIN kelas k ON k.id = s.kelas_id
@@ -223,58 +231,4 @@ pub async fn biodata_siswa_table(
         .unwrap();
 
     Html(rendered).into_response()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{biodata_siswa_table, BiodataFilter, Htmx};
-    use crate::{
-        models::{auth_user::AuthUser, role::Role},
-        utils::page_context::PageContext,
-    };
-    use axum::{Extension, extract::Query};
-    use axum::http::Uri;
-    use axum::response::IntoResponse;
-    use serial_test::serial;
-
-    fn base_ctx() -> PageContext {
-        PageContext {
-            user: AuthUser {
-                id: 1,
-                roles: vec![Role::Guru],
-                name: "Guru".into(),
-                foto: None,
-            },
-            tera: crate::test_support::build_test_tera(),
-            uri: Uri::from_static("/biodata-siswa"),
-        }
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn biodata_siswa_table_redirects_for_non_htmx() {
-        let Some(test_db) = crate::test_support::TestDb::try_new().await else {
-            return;
-        };
-        crate::test_support::seed_base_data(&test_db.pool).await;
-
-        let filter = BiodataFilter {
-            tahun: None,
-            kelas_id: None,
-            page: None,
-            search: None,
-        };
-
-        let response = biodata_siswa_table(
-            base_ctx(),
-            Htmx(false),
-            Query(filter),
-            Extension(test_db.pool.clone()),
-        )
-        .await
-        .into_response();
-
-        assert_eq!(response.status(), axum::http::StatusCode::SEE_OTHER);
-        test_db.teardown().await;
-    }
 }

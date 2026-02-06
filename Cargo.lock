@@ -638,6 +638,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "examsmkmifda"
+version = "1.0.0"
+dependencies = [
+ "askama",
+ "askama_axum",
+ "axum",
+ "axum-extra",
+ "bcrypt",
+ "chrono",
+ "dotenvy",
+ "jsonwebtoken",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "sqlx",
+ "tera",
+ "time",
+ "tokio",
+ "tower",
+ "tower-http",
+ "url",
+ "uuid",
+ "validator",
+]
+
+[[package]]
 name = "find-msvc-tools"
 version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1908,32 +1934,6 @@ checksum = "77549399552de45a898a580c1b41d445bf730df867cc44e6c0233bbc4b8329de"
 dependencies = [
  "digest",
  "rand_core",
-]
-
-[[package]]
-name = "sikadusmpmifda"
-version = "1.0.0"
-dependencies = [
- "askama",
- "askama_axum",
- "axum",
- "axum-extra",
- "bcrypt",
- "chrono",
- "dotenvy",
- "jsonwebtoken",
- "serde",
- "serde_json",
- "serial_test",
- "sqlx",
- "tera",
- "time",
- "tokio",
- "tower",
- "tower-http",
- "url",
- "uuid",
- "validator",
 ]
 
 [[package]]

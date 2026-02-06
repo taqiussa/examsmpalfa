@@ -1,14 +1,14 @@
 services:
   app:
-    image: taqiussa/sikadusmpmifdarust:latest
+    image: taqiussa/exasmkmifda:latest
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: sikadusmpmifdarust
+    container_name: exasmkmifda
     restart: unless-stopped
     environment:
       APP_ENV: ${APP_ENV:-production}
-      APP_PORT: ${APP_PORT:-3030}
+      APP_PORT: ${APP_PORT:-3000}
       DATABASE_URL: ${DATABASE_URL}
     pull_policy: ${PULL_POLICY:-if_not_present}
     extra_hosts:

@@ -41,10 +41,10 @@ COPY src/ ./src/
 COPY templates/ ./templates/
 COPY .sqlx/ ./.sqlx/
 
-RUN rm -f /app/target/release/sikadusmpmifda \
+RUN rm -f /app/target/release/examsmkmifda \
     && find src -type f -exec touch {} + \
     && cargo build --release --locked \
-    && strip /app/target/release/sikadusmpmifda
+    && strip /app/target/release/examsmkmifda
 
 
 # =========================
@@ -60,7 +60,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libmariadb3 \
  && rm -rf /var/lib/apt/lists/*
 
-COPY --from=rust_builder /app/target/release/sikadusmpmifda /app/app
+COPY --from=rust_builder /app/target/release/examsmkmifda /app/app
 COPY --from=rust_builder /app/templates ./templates
 COPY --from=fe_builder /app/static ./static
 
