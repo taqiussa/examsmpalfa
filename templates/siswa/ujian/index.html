@@ -1,0 +1,61 @@
+{% extends "layouts/app.html" %}
+
+{% block content %}
+<div class="card  mx-auto space-y-6">
+  <h1 class="card-header">Masuk Ujian</h1>
+
+  {% if data.message %}
+  <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+    {{ data.message }}
+  </div>
+  {% endif %}
+
+  {% if data.error %}
+  <div class="rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+    {{ data.error }}
+  </div>
+  {% endif %}
+
+  {% if data.active_ujian %}
+  <div class="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-2">
+    <div class="text-sm text-slate-500">Ujian aktif saat ini</div>
+    <div class="text-lg font-semibold text-slate-800">{{ data.active_ujian.title }}</div>
+    {% if data.active_ujian.description %}
+    <div class="text-sm text-slate-600">{{ data.active_ujian.description }}</div>
+    {% endif %}
+    <div class="text-sm text-slate-600">
+      Durasi: <span class="font-semibold">{{ data.active_ujian.waktu_menit }} menit</span>
+      | Total soal: <span class="font-semibold">{{ data.active_ujian.total_soal }}</span> |
+      Jurusan: <span class="font-semibold">{{ data.active_ujian.jurusan }}</span>
+    </div>
+  </div>
+
+  {% if data.active_ujian.is_submitted %}
+  <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+    Anda sudah menyelesaikan ujian ini. Nilai akhir hanya dapat dilihat oleh guru/admin.
+  </div>
+  {% else %}
+  <form method="post" action="/siswa/ujian/konfirmasi" class="space-y-4">
+    <div>
+      <label class="block text-sm font-medium text-slate-700 mb-1">
+        Token Ujian
+      </label>
+      <input type="text" name="token" class="input w-full uppercase" placeholder="Masukkan token dari guru" required>
+    </div>
+    <button type="submit" class="button">
+      {% if data.active_ujian.has_session %}
+      Lanjutkan Ujian
+      {% else %}
+      Konfirmasi & Mulai Ujian
+      {% endif %}
+    </button>
+  </form>
+  {% endif %}
+
+  {% else %}
+  <div class="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+    Belum ada ujian aktif. Silakan tunggu guru mengaktifkan ujian dan membagikan token.
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

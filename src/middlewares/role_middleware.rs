@@ -70,6 +70,7 @@ mod tests {
             .layer(Extension(crate::test_support::build_test_tera()))
             .layer(Extension(AuthUser {
                 id: 1,
+                nis: None,
                 roles: vec![Role::Admin],
                 name: "Admin".into(),
                 foto: None,
@@ -92,6 +93,7 @@ mod tests {
             .layer(Extension(crate::test_support::build_test_tera()))
             .layer(Extension(AuthUser {
                 id: 2,
+                nis: None,
                 roles: vec![Role::Guru],
                 name: "Guru".into(),
                 foto: None,

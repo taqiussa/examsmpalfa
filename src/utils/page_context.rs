@@ -59,6 +59,7 @@ mod tests {
 
         parts.extensions.insert(AuthUser {
             id: 1,
+            nis: None,
             roles: vec![Role::Admin],
             name: "Admin".into(),
             foto: None,

@@ -454,6 +454,7 @@ mod tests {
         PageContext {
             user: AuthUser {
                 id: 1,
+                nis: None,
                 roles: vec![Role::Guru],
                 name: "Guru".into(),
                 foto: None,

@@ -46,7 +46,7 @@ pub async fn auth_middleware(jar: CookieJar, mut req: Request<Body>, next: Next)
     };
 
     // 4️⃣ ambil data user
-    let user = match sqlx::query!("SELECT name, foto FROM users WHERE id = ?", user_id)
+    let user = match sqlx::query!("SELECT name, foto, nis FROM users WHERE id = ?", user_id)
         .fetch_one(pool)
         .await
     {
@@ -57,6 +57,7 @@ pub async fn auth_middleware(jar: CookieJar, mut req: Request<Body>, next: Next)
     // 5️⃣ inject AuthUser dengan multi-role
     req.extensions_mut().insert(AuthUser {
         id: user_id,
+        nis: user.nis,
         roles, // ⬅️ pakai Vec<Role>
         name: user.name,
         foto: user.foto,

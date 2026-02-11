@@ -3,6 +3,8 @@
                 <tr>
                         <th class="border px-2 py-2 w-12">No.</th>
                         <th class="border px-2 py-2 text-left">Judul Ujian</th>
+                        <th class="border px-2 py-2 text-left">Mapel</th>
+                        <th class="border px-2 py-2 text-center">Jurusan</th>
                         <th class="border px-2 py-2 text-left">Tanggal</th>
                         <th class="border px-2 py-2 text-center">Waktu</th>
                         <th class="border px-2 py-2 text-center">Soal</th>
@@ -14,7 +16,7 @@
         <tbody>
                 {% if list_ujian | length == 0 %}
                 <tr>
-                        <td colspan="7" class="border px-3 py-8 text-center text-slate-500">
+                        <td colspan="9" class="border px-3 py-8 text-center text-slate-500">
                                 {% if filter_search and filter_search != "" %}
                                 Tidak ada ujian yang sesuai dengan pencarian "{{ filter_search }}"
                                 {% else %}
@@ -32,6 +34,8 @@
                                 <div class="text-xs text-slate-500 mt-1 truncate max-w-xs">{{ u.description }}</div>
                                 {% endif %}
                         </td>
+                        <td class="border px-2 py-2">{{ u.mata_pelajaran | default(value="-") }}</td>
+                        <td class="border px-2 py-2 text-center">{{ u.jurusan | default(value="-") }}</td>
                         <td class="border px-2 py-2 text-center">
                                 {{ u.tanggal | default(value="-") }}
                         </td>

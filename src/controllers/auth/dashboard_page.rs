@@ -25,6 +25,7 @@ mod tests {
         let ctx = PageContext {
             user: AuthUser {
                 id: 1,
+                nis: None,
                 roles: vec![Role::Admin],
                 name: "Admin".into(),
                 foto: None,

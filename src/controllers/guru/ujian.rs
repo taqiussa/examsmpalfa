@@ -5,14 +5,13 @@ use axum::{
 };
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
-use sqlx::MySqlPool;
+use sqlx::{FromRow, MySqlPool};
 use tera::Context;
+use uuid::Uuid;
 
 use crate::utils::{page_context::PageContext, render::render, tahun::data_tahun};
 
 use super::absensi_kelas::Htmx;
-
-// ============ STRUCTS ============
 
 #[derive(Serialize)]
 struct UjianListData {
@@ -20,16 +19,17 @@ struct UjianListData {
     list_ujian: Vec<UjianRow>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, FromRow)]
 struct UjianRow {
-    id: Option<i64>,
-    title: Option<String>,
+    id: i64,
+    title: String,
     description: Option<String>,
-    tanggal: Option<NaiveDate>,
-    waktu_menit: Option<i32>,
-    total_soal: Option<i32>,
-    is_active: Option<i8>,
-    created_by: Option<i64>,
+    tanggal: NaiveDate,
+    waktu_menit: i32,
+    total_soal: i32,
+    is_active: i8,
+    jurusan: String,
+    mata_pelajaran: Option<String>,
     created_at: Option<String>,
 }
 
@@ -46,10 +46,22 @@ struct CreateUjianData {
     description: String,
     tanggal: String,
     waktu_menit: i32,
+    mata_pelajaran_id: i64,
+    jurusan: String,
+    mapel_options: Vec<MapelOption>,
+    errors: std::collections::HashMap<String, String>,
+}
+
+#[derive(Serialize, FromRow)]
+struct MapelOption {
+    id: i64,
+    nama: String,
 }
 
 #[derive(Deserialize)]
 pub struct CreateUjianForm {
+    pub mata_pelajaran_id: i64,
+    pub jurusan: String,
     pub title: String,
     pub description: Option<String>,
     pub tanggal: String,
@@ -60,23 +72,27 @@ pub struct CreateUjianForm {
 struct UjianDetailData {
     ujian: Option<UjianDetailRow>,
     list_soal: Vec<SoalRow>,
+    list_token: Vec<TokenRow>,
+    list_hasil: Vec<HasilRow>,
     can_add_soal: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, FromRow)]
 struct UjianDetailRow {
     id: i64,
     title: String,
     description: Option<String>,
     tanggal: NaiveDate,
     waktu_menit: i32,
-    total_soal: Option<i32>,
-    is_active: Option<i8>,
+    total_soal: i32,
+    is_active: i8,
+    jurusan: String,
+    mata_pelajaran: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, FromRow)]
 struct SoalRow {
-    id: Option<i64>,
+    id: i64,
     pertanyaan: Option<String>,
     opsi_a: Option<String>,
     opsi_b: Option<String>,
@@ -86,6 +102,25 @@ struct SoalRow {
     bobot_nilai: Option<i32>,
     kategori: Option<String>,
     urutan: Option<i32>,
+}
+
+#[derive(Serialize, FromRow)]
+struct TokenRow {
+    id: i64,
+    token: String,
+    is_active: i8,
+    expired_at: Option<String>,
+    created_at: Option<String>,
+}
+
+#[derive(Serialize, FromRow)]
+struct HasilRow {
+    nama: String,
+    nis: Option<String>,
+    status: String,
+    last_nomor: i32,
+    total_nilai: Option<i64>,
+    submitted_at: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -114,7 +149,10 @@ pub struct CreateSoalForm {
     pub kategori: Option<String>,
 }
 
-// ============ UTILITY FUNCTIONS ============
+#[derive(Deserialize)]
+pub struct ToggleAktifForm {
+    pub active: i8,
+}
 
 fn flash_success(message: &str) -> HeaderMap {
     let mut headers = HeaderMap::new();
@@ -141,7 +179,18 @@ fn flash_error(message: &str) -> HeaderMap {
     headers
 }
 
-// ============ INDEX & TABLE ============
+fn valid_jurusan(v: &str) -> bool {
+    matches!(v, "UMUM" | "PBS" | "TKR" | "TKJ")
+}
+
+async fn fetch_mapel_options(db: &MySqlPool) -> Vec<MapelOption> {
+    sqlx::query_as::<_, MapelOption>(
+        "SELECT CAST(id AS SIGNED) as id, nama FROM mata_pelajarans ORDER BY nama ASC",
+    )
+    .fetch_all(db)
+    .await
+    .unwrap_or_default()
+}
 
 pub async fn ujian_index(
     ctx: PageContext,
@@ -171,27 +220,29 @@ pub async fn ujian_table(
 
     let search_like = format!("%{}%", search);
 
-    let rows: Vec<UjianRow> = sqlx::query_as!(
-        UjianRow,
+    let rows: Vec<UjianRow> = sqlx::query_as::<_, UjianRow>(
         r#"
-        SELECT 
-            id,
-            title,
-            description,
-            tanggal,
-            waktu_menit,
-            total_soal,
-            is_active,
-            created_by,
-            DATE_FORMAT(created_at, '%Y-%m-%d %H:%i') as created_at
-        FROM ujians
-        WHERE (title LIKE ? OR description LIKE ?)
-        ORDER BY created_at DESC
+        SELECT
+            u.id,
+            u.title,
+            u.description,
+            u.tanggal,
+            u.waktu_menit,
+            COALESCE(u.total_soal, 0) as total_soal,
+            u.is_active,
+            u.jurusan,
+            mp.nama as mata_pelajaran,
+            DATE_FORMAT(u.created_at, '%Y-%m-%d %H:%i') as created_at
+        FROM ujians u
+        JOIN mata_pelajarans mp ON mp.id = u.mata_pelajaran_id
+        WHERE (u.title LIKE ? OR u.description LIKE ? OR mp.nama LIKE ?)
+        ORDER BY u.created_at DESC
         LIMIT 100
         "#,
-        search_like,
-        search_like
     )
+    .bind(&search_like)
+    .bind(&search_like)
+    .bind(&search_like)
     .fetch_all(&db)
     .await
     .unwrap_or_default();
@@ -209,15 +260,17 @@ pub async fn ujian_table(
     Html(rendered).into_response()
 }
 
-// ============ CREATE & STORE ============
-
-pub async fn ujian_create(ctx: PageContext) -> Html<String> {
+pub async fn ujian_create(ctx: PageContext, axum::Extension(db): axum::Extension<MySqlPool>) -> Html<String> {
     let data = CreateUjianData {
         tahun: data_tahun(),
         title: String::new(),
         description: String::new(),
         tanggal: chrono::Local::now().format("%Y-%m-%d").to_string(),
         waktu_menit: 60,
+        mata_pelajaran_id: 0,
+        jurusan: "UMUM".to_string(),
+        mapel_options: fetch_mapel_options(&db).await,
+        errors: std::collections::HashMap::new(),
     };
 
     render(&ctx, "guru/ujian/create.html", "Buat Ujian Baru", data)
@@ -233,14 +286,33 @@ pub async fn ujian_store(
         return Redirect::to("/ujian/create").into_response();
     }
 
-    // Validation
+    let mut errors = std::collections::HashMap::<String, String>::new();
+
     if form.title.trim().is_empty() {
+        errors.insert("title".to_string(), "Judul ujian wajib diisi".to_string());
+    }
+    if form.mata_pelajaran_id <= 0 {
+        errors.insert(
+            "mata_pelajaran_id".to_string(),
+            "Mata pelajaran wajib dipilih".to_string(),
+        );
+    }
+    let jurusan = form.jurusan.trim().to_uppercase();
+    if !valid_jurusan(&jurusan) {
+        errors.insert("jurusan".to_string(), "Jurusan tidak valid".to_string());
+    }
+
+    if !errors.is_empty() {
         let data = CreateUjianData {
             tahun: data_tahun(),
             title: form.title,
             description: form.description.unwrap_or_default(),
             tanggal: form.tanggal,
             waktu_menit: form.waktu_menit,
+            mata_pelajaran_id: form.mata_pelajaran_id,
+            jurusan,
+            mapel_options: fetch_mapel_options(&db).await,
+            errors,
         };
         let rendered = render(&ctx, "guru/ujian/create.html", "Buat Ujian Baru", data);
         let mut headers = HeaderMap::new();
@@ -249,17 +321,21 @@ pub async fn ujian_store(
         return (headers, Html(rendered)).into_response();
     }
 
-    let result = sqlx::query!(
+    let result = sqlx::query(
         r#"
-        INSERT INTO ujians (title, description, tanggal, waktu_menit, is_active, created_by, created_at, updated_at)
-        VALUES (?, ?, ?, ?, TRUE, ?, NOW(), NOW())
+        INSERT INTO ujians
+            (mata_pelajaran_id, jurusan, title, description, tanggal, waktu_menit, is_active, created_by, created_at, updated_at)
+        VALUES
+            (?, ?, ?, ?, ?, ?, TRUE, ?, NOW(), NOW())
         "#,
-        form.title,
-        form.description,
-        form.tanggal,
-        form.waktu_menit,
-        ctx.user.id as i64
     )
+    .bind(form.mata_pelajaran_id)
+    .bind(&jurusan)
+    .bind(&form.title)
+    .bind(&form.description)
+    .bind(&form.tanggal)
+    .bind(form.waktu_menit)
+    .bind(ctx.user.id as i64)
     .execute(&db)
     .await;
 
@@ -278,29 +354,63 @@ pub async fn ujian_store(
     }
 }
 
-// ============ SHOW & DELETE ============
-
 pub async fn ujian_show(
     ctx: PageContext,
     Path(ujian_id): Path<i64>,
     axum::Extension(db): axum::Extension<MySqlPool>,
 ) -> axum::response::Response {
-    let ujian: Option<UjianDetailRow> = sqlx::query_as!(
-        UjianDetailRow,
+    // Sinkronkan nilai akhir peserta submitted dari data jawaban aktual
+    // supaya data lama yang sempat tersimpan 0 ikut terkoreksi.
+    let _ = sqlx::query(
         r#"
-        SELECT 
-            id,
-            title,
-            description,
-            tanggal,
-            waktu_menit,
-            total_soal,
-            is_active
-        FROM ujians
-        WHERE id = ?
+        UPDATE ujian_pesertas p
+        LEFT JOIN (
+            SELECT
+                j.ujian_id,
+                j.nis,
+                COALESCE(
+                    SUM(
+                        CASE
+                            WHEN j.pilihan = s.kunci_jawaban THEN COALESCE(s.bobot_nilai, 1)
+                            ELSE 0
+                        END
+                    ),
+                    0
+                ) AS nilai_hitung
+            FROM ujian_jawabans j
+            JOIN soals s ON s.id = j.soal_id
+            WHERE j.ujian_id = ?
+            GROUP BY j.ujian_id, j.nis
+        ) x ON x.ujian_id = p.ujian_id AND x.nis = p.nis
+        SET p.total_nilai = COALESCE(x.nilai_hitung, 0),
+            p.updated_at = NOW()
+        WHERE p.ujian_id = ?
+          AND p.status = 'submitted'
         "#,
-        ujian_id
     )
+    .bind(ujian_id)
+    .bind(ujian_id)
+    .execute(&db)
+    .await;
+
+    let ujian: Option<UjianDetailRow> = sqlx::query_as::<_, UjianDetailRow>(
+        r#"
+        SELECT
+            u.id,
+            u.title,
+            u.description,
+            u.tanggal,
+            u.waktu_menit,
+            COALESCE(u.total_soal, 0) as total_soal,
+            u.is_active,
+            u.jurusan,
+            mp.nama as mata_pelajaran
+        FROM ujians u
+        JOIN mata_pelajarans mp ON mp.id = u.mata_pelajaran_id
+        WHERE u.id = ?
+        "#,
+    )
+    .bind(ujian_id)
     .fetch_optional(&db)
     .await
     .unwrap_or(None);
@@ -309,10 +419,9 @@ pub async fn ujian_show(
         return Redirect::to("/ujian").into_response();
     }
 
-    let list_soal: Vec<SoalRow> = sqlx::query_as!(
-        SoalRow,
+    let list_soal: Vec<SoalRow> = sqlx::query_as::<_, SoalRow>(
         r#"
-        SELECT 
+        SELECT
             s.id,
             s.pertanyaan,
             s.opsi_a,
@@ -328,8 +437,50 @@ pub async fn ujian_show(
         WHERE us.ujian_id = ?
         ORDER BY us.urutan ASC
         "#,
-        ujian_id
     )
+    .bind(ujian_id)
+    .fetch_all(&db)
+    .await
+    .unwrap_or_default();
+
+    let list_token = sqlx::query_as::<_, TokenRow>(
+        r#"
+        SELECT
+            id,
+            token,
+            is_active,
+            DATE_FORMAT(expired_at, '%Y-%m-%d %H:%i') as expired_at,
+            DATE_FORMAT(created_at, '%Y-%m-%d %H:%i') as created_at
+        FROM ujian_tokens
+        WHERE ujian_id = ?
+        ORDER BY created_at DESC
+        LIMIT 20
+        "#,
+    )
+    .bind(ujian_id)
+    .fetch_all(&db)
+    .await
+    .unwrap_or_default();
+
+    let list_hasil = sqlx::query_as::<_, HasilRow>(
+        r#"
+        SELECT
+            COALESCE(u.name, CONCAT('NIS ', p.nis)) as nama,
+            p.nis,
+            p.status,
+            p.last_nomor,
+            COALESCE(p.total_nilai, 0) as total_nilai,
+            DATE_FORMAT(p.submitted_at, '%Y-%m-%d %H:%i') as submitted_at
+        FROM ujian_pesertas p
+        LEFT JOIN users u ON u.nis = p.nis
+        WHERE p.ujian_id = ?
+        ORDER BY
+            CASE WHEN p.status = 'submitted' THEN 0 ELSE 1 END,
+            p.submitted_at DESC,
+            u.name ASC
+        "#,
+    )
+    .bind(ujian_id)
     .fetch_all(&db)
     .await
     .unwrap_or_default();
@@ -337,6 +488,8 @@ pub async fn ujian_show(
     let data = UjianDetailData {
         ujian,
         list_soal,
+        list_token,
+        list_hasil,
         can_add_soal: true,
     };
 
@@ -353,7 +506,8 @@ pub async fn ujian_delete(
         return StatusCode::BAD_REQUEST.into_response();
     }
 
-    let result = sqlx::query!("DELETE FROM ujians WHERE id = ?", ujian_id)
+    let result = sqlx::query("DELETE FROM ujians WHERE id = ?")
+        .bind(ujian_id)
         .execute(&db)
         .await;
 
@@ -370,7 +524,142 @@ pub async fn ujian_delete(
     }
 }
 
-// ============ SOAL CREATE & STORE ============
+pub async fn ujian_toggle_active(
+    _ctx: PageContext,
+    Htmx(is_htmx): Htmx,
+    Path(ujian_id): Path<i64>,
+    axum::Extension(db): axum::Extension<MySqlPool>,
+    Form(form): Form<ToggleAktifForm>,
+) -> axum::response::Response {
+    if !is_htmx {
+        return Redirect::to(&format!("/ujian/{}", ujian_id)).into_response();
+    }
+
+    if form.active == 1 {
+        let _ = sqlx::query("UPDATE ujians SET is_active = 0, updated_at = NOW()")
+            .execute(&db)
+            .await;
+    }
+
+    let result = sqlx::query("UPDATE ujians SET is_active = ?, updated_at = NOW() WHERE id = ?")
+        .bind(form.active)
+        .bind(ujian_id)
+        .execute(&db)
+        .await;
+
+    match result {
+        Ok(_) => {
+            let mut headers = flash_success(if form.active == 1 {
+                "Ujian diaktifkan. Ujian lain dinonaktifkan otomatis."
+            } else {
+                "Ujian dinonaktifkan."
+            });
+            headers.insert(
+                "HX-Redirect",
+                format!("/ujian/{}", ujian_id).parse().unwrap(),
+            );
+            (headers, Html(String::new())).into_response()
+        }
+        Err(e) => {
+            eprintln!("Error toggling ujian active: {:?}", e);
+            let mut headers = flash_error("Gagal mengubah status ujian.");
+            headers.insert(
+                "HX-Redirect",
+                format!("/ujian/{}", ujian_id).parse().unwrap(),
+            );
+            (headers, Html(String::new())).into_response()
+        }
+    }
+}
+
+pub async fn ujian_generate_token(
+    ctx: PageContext,
+    Htmx(is_htmx): Htmx,
+    Path(ujian_id): Path<i64>,
+    axum::Extension(db): axum::Extension<MySqlPool>,
+) -> axum::response::Response {
+    if !is_htmx {
+        return Redirect::to(&format!("/ujian/{}", ujian_id)).into_response();
+    }
+
+    let token = Uuid::new_v4()
+        .simple()
+        .to_string()
+        .chars()
+        .take(8)
+        .collect::<String>()
+        .to_uppercase();
+
+    let result = sqlx::query(
+        r#"
+        INSERT INTO ujian_tokens (ujian_id, token, is_active, created_by, created_at)
+        VALUES (?, ?, 1, ?, NOW())
+        "#,
+    )
+    .bind(ujian_id)
+    .bind(token)
+    .bind(ctx.user.id as i64)
+    .execute(&db)
+    .await;
+
+    match result {
+        Ok(_) => {
+            let mut headers = flash_success("Token ujian berhasil dibuat.");
+            headers.insert(
+                "HX-Redirect",
+                format!("/ujian/{}", ujian_id).parse().unwrap(),
+            );
+            (headers, Html(String::new())).into_response()
+        }
+        Err(e) => {
+            eprintln!("Error generating ujian token: {:?}", e);
+            let mut headers = flash_error("Gagal membuat token ujian.");
+            headers.insert(
+                "HX-Redirect",
+                format!("/ujian/{}", ujian_id).parse().unwrap(),
+            );
+            (headers, Html(String::new())).into_response()
+        }
+    }
+}
+
+pub async fn ujian_toggle_token(
+    Htmx(is_htmx): Htmx,
+    Path((ujian_id, token_id)): Path<(i64, i64)>,
+    axum::Extension(db): axum::Extension<MySqlPool>,
+    Form(form): Form<ToggleAktifForm>,
+) -> axum::response::Response {
+    if !is_htmx {
+        return Redirect::to(&format!("/ujian/{}", ujian_id)).into_response();
+    }
+
+    let result = sqlx::query("UPDATE ujian_tokens SET is_active = ? WHERE id = ? AND ujian_id = ?")
+        .bind(form.active)
+        .bind(token_id)
+        .bind(ujian_id)
+        .execute(&db)
+        .await;
+
+    match result {
+        Ok(_) => {
+            let mut headers = flash_success("Status token berhasil diperbarui.");
+            headers.insert(
+                "HX-Redirect",
+                format!("/ujian/{}", ujian_id).parse().unwrap(),
+            );
+            (headers, Html(String::new())).into_response()
+        }
+        Err(e) => {
+            eprintln!("Error toggling token active: {:?}", e);
+            let mut headers = flash_error("Gagal mengubah status token.");
+            headers.insert(
+                "HX-Redirect",
+                format!("/ujian/{}", ujian_id).parse().unwrap(),
+            );
+            (headers, Html(String::new())).into_response()
+        }
+    }
+}
 
 pub async fn soal_create(
     ctx: PageContext,
@@ -378,22 +667,24 @@ pub async fn soal_create(
     Path(ujian_id): Path<i64>,
     axum::Extension(db): axum::Extension<MySqlPool>,
 ) -> axum::response::Response {
-    let ujian: Option<UjianDetailRow> = sqlx::query_as!(
-        UjianDetailRow,
+    let ujian: Option<UjianDetailRow> = sqlx::query_as::<_, UjianDetailRow>(
         r#"
-        SELECT 
-            id,
-            title,
-            description,
-            tanggal,
-            waktu_menit,
-            total_soal,
-            is_active
-        FROM ujians
-        WHERE id = ?
+        SELECT
+            u.id,
+            u.title,
+            u.description,
+            u.tanggal,
+            u.waktu_menit,
+            COALESCE(u.total_soal, 0) as total_soal,
+            u.is_active,
+            u.jurusan,
+            mp.nama as mata_pelajaran
+        FROM ujians u
+        JOIN mata_pelajarans mp ON mp.id = u.mata_pelajaran_id
+        WHERE u.id = ?
         "#,
-        ujian_id
     )
+    .bind(ujian_id)
     .fetch_optional(&db)
     .await
     .unwrap_or(None);
@@ -419,7 +710,6 @@ pub async fn soal_create(
         let html = render(&ctx, "guru/ujian/_soal_form.html", "Tambah Soal", data);
         Html(html.0).into_response()
     } else {
-        // When requested directly (not via HTMX), render a full page that includes the fragment
         let html = render(&ctx, "guru/ujian/soal_create.html", "Tambah Soal", data);
         Html(html.0).into_response()
     }
@@ -436,39 +726,37 @@ pub async fn soal_store(
         return Redirect::to(&format!("/ujian/{}/soal/create", ujian_id)).into_response();
     }
 
-    // Validation
     if form.pertanyaan.trim().is_empty() {
         let mut headers = flash_error("Pertanyaan tidak boleh kosong!");
         headers.insert("HX-Retarget", "#soal-form-container".parse().unwrap());
         return (headers, Html(String::new())).into_response();
     }
 
-    let result = sqlx::query!(
+    let result = sqlx::query(
         r#"
         INSERT INTO soals (pertanyaan, opsi_a, opsi_b, opsi_c, opsi_d, kunci_jawaban, bobot_nilai, kategori, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
         "#,
-        form.pertanyaan,
-        form.opsi_a,
-        form.opsi_b,
-        form.opsi_c,
-        form.opsi_d,
-        form.kunci_jawaban,
-        form.bobot_nilai.unwrap_or(1),
-        form.kategori
     )
+    .bind(&form.pertanyaan)
+    .bind(&form.opsi_a)
+    .bind(&form.opsi_b)
+    .bind(&form.opsi_c)
+    .bind(&form.opsi_d)
+    .bind(&form.kunci_jawaban)
+    .bind(form.bobot_nilai.unwrap_or(1))
+    .bind(&form.kategori)
     .execute(&db)
     .await;
 
     match result {
         Ok(result) => {
-            let soal_id = result.last_insert_id();
+            let soal_id = result.last_insert_id() as i64;
 
-            // Get current max urutan
-            let max_urutan: Option<i32> = sqlx::query_scalar!(
+            let max_urutan: Option<i64> = sqlx::query_scalar(
                 "SELECT MAX(urutan) FROM ujian_soals WHERE ujian_id = ?",
-                ujian_id
             )
+            .bind(ujian_id)
             .fetch_one(&db)
             .await
             .ok()
@@ -476,13 +764,12 @@ pub async fn soal_store(
 
             let urutan = max_urutan.unwrap_or(0) + 1;
 
-            // Insert into pivot table
-            let _ = sqlx::query!(
+            let _ = sqlx::query(
                 "INSERT INTO ujian_soals (ujian_id, soal_id, urutan, created_at) VALUES (?, ?, ?, NOW())",
-                ujian_id,
-                soal_id,
-                urutan
             )
+            .bind(ujian_id)
+            .bind(soal_id)
+            .bind(urutan as i32)
             .execute(&db)
             .await;
 
@@ -514,16 +801,14 @@ pub async fn soal_delete(
         return StatusCode::BAD_REQUEST.into_response();
     }
 
-    // Delete from pivot table first (due to foreign key)
-    let _ = sqlx::query!(
-        "DELETE FROM ujian_soals WHERE ujian_id = ? AND soal_id = ?",
-        ujian_id,
-        soal_id
-    )
-    .execute(&db)
-    .await;
+    let _ = sqlx::query("DELETE FROM ujian_soals WHERE ujian_id = ? AND soal_id = ?")
+        .bind(ujian_id)
+        .bind(soal_id)
+        .execute(&db)
+        .await;
 
-    let result = sqlx::query!("DELETE FROM soals WHERE id = ?", soal_id)
+    let result = sqlx::query("DELETE FROM soals WHERE id = ?")
+        .bind(soal_id)
         .execute(&db)
         .await;
 

@@ -29,9 +29,11 @@
     const btnCancel = document.getElementById("confirm-dialog-cancel");
     const btnConfirm = document.getElementById("confirm-dialog-confirm");
     let pendingForm = null;
+    let pendingSubmitter = null;
 
-    function open(message, form, confirmText) {
+    function open(message, form, confirmText, submitter) {
       pendingForm = form;
+      pendingSubmitter = submitter || null;
       messageEl.textContent = message || "Apakah Anda yakin?";
       if (confirmText) btnConfirm.textContent = confirmText;
       dialog.classList.remove("hidden");
@@ -46,6 +48,7 @@
         dialog.classList.remove("flex");
         btnConfirm.textContent = "Hapus";
         pendingForm = null;
+        pendingSubmitter = null;
       }, 200);
     }
 
@@ -53,9 +56,17 @@
       const trigger = event.target.closest("[data-confirm]");
       if (!trigger) return;
       event.preventDefault();
-      const form = trigger.closest("form");
+      const formId = trigger.getAttribute("form");
+      const form = formId
+        ? document.getElementById(formId)
+        : trigger.closest("form");
       if (!form) return;
-      open(trigger.getAttribute("data-confirm"), form, trigger.getAttribute("data-confirm-text"));
+      open(
+        trigger.getAttribute("data-confirm"),
+        form,
+        trigger.getAttribute("data-confirm-text"),
+        trigger
+      );
     });
 
     btnCancel.addEventListener("click", close);
@@ -64,7 +75,7 @@
     });
 
     btnConfirm.addEventListener("click", () => {
-      if (pendingForm) pendingForm.requestSubmit();
+      if (pendingForm) pendingForm.requestSubmit(pendingSubmitter || undefined);
       close();
     });
   })();

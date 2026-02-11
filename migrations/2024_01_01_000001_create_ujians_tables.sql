@@ -14,6 +14,8 @@ DROP TABLE IF EXISTS ujians;
 
 CREATE TABLE IF NOT EXISTS ujians (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    mata_pelajaran_id BIGINT UNSIGNED NOT NULL,
+    jurusan ENUM('UMUM','PBS','TKR','TKJ') NOT NULL DEFAULT 'UMUM',
     title VARCHAR(255) NOT NULL,
     description TEXT,
     tanggal DATE NOT NULL,
@@ -22,7 +24,9 @@ CREATE TABLE IF NOT EXISTS ujians (
     is_active BOOLEAN DEFAULT TRUE,
     created_by BIGINT,
     created_at DATETIME,
-    updated_at DATETIME
+    updated_at DATETIME,
+    CONSTRAINT fk_ujians_mapel
+        FOREIGN KEY (mata_pelajaran_id) REFERENCES mata_pelajarans(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ======================
@@ -61,6 +65,8 @@ CREATE TABLE IF NOT EXISTS ujian_soals (
 -- ======================
 CREATE INDEX idx_ujians_tanggal ON ujians(tanggal);
 CREATE INDEX idx_ujians_active ON ujians(is_active);
+CREATE INDEX idx_ujians_mapel ON ujians(mata_pelajaran_id);
+CREATE INDEX idx_ujians_jurusan ON ujians(jurusan);
 CREATE INDEX idx_soals_kategori ON soals(kategori);
 CREATE INDEX idx_ujian_soals_ujian ON ujian_soals(ujian_id);
 CREATE INDEX idx_ujian_soals_soal ON ujian_soals(soal_id);
@@ -73,24 +79,20 @@ DROP TRIGGER IF EXISTS after_ujian_soal_insert;
 CREATE TRIGGER after_ujian_soal_insert
 AFTER INSERT ON ujian_soals
 FOR EACH ROW
-BEGIN
-    UPDATE ujians
-    SET total_soal = (
-        SELECT COUNT(*) FROM ujian_soals WHERE ujian_id = NEW.ujian_id
-    ),
-    updated_at = NOW()
-    WHERE id = NEW.ujian_id;
-END;
+UPDATE ujians
+SET total_soal = (
+    SELECT COUNT(*) FROM ujian_soals WHERE ujian_id = NEW.ujian_id
+),
+updated_at = NOW()
+WHERE id = NEW.ujian_id;
 
 DROP TRIGGER IF EXISTS after_ujian_soal_delete;
 CREATE TRIGGER after_ujian_soal_delete
 AFTER DELETE ON ujian_soals
 FOR EACH ROW
-BEGIN
-    UPDATE ujians
-    SET total_soal = (
-        SELECT COUNT(*) FROM ujian_soals WHERE ujian_id = OLD.ujian_id
-    ),
-    updated_at = NOW()
-    WHERE id = OLD.ujian_id;
-END;
+UPDATE ujians
+SET total_soal = (
+    SELECT COUNT(*) FROM ujian_soals WHERE ujian_id = OLD.ujian_id
+),
+updated_at = NOW()
+WHERE id = OLD.ujian_id;
