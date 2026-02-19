@@ -17,8 +17,8 @@
         "name": "name",
         "type_info": {
           "type": "VarString",
-          "flags": "NOT_NULL | NO_DEFAULT_VALUE",
-          "max_size": 1020
+          "flags": "NOT_NULL | MULTIPLE_KEY | NO_DEFAULT_VALUE",
+          "max_size": 400
         }
       },
       {
@@ -26,8 +26,8 @@
         "name": "username!",
         "type_info": {
           "type": "VarString",
-          "flags": "",
-          "max_size": 80
+          "flags": "UNIQUE_KEY",
+          "max_size": 120
         }
       }
     ],

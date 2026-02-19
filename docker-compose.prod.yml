@@ -1,20 +1,15 @@
 services:
   app:
     image: taqiussa/examsmkmifda:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
     container_name: examsmkmifda
     restart: unless-stopped
     env_file:
-      - .env.docker
-    pull_policy: ${PULL_POLICY:-if_not_present}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - .env
+    pull_policy: ${PULL_POLICY:-always}
     networks:
       - proxy_network
     ports:
-      - "8830:3000"
+      - "8830:${APP_PORT}"
 
 networks:
   proxy_network:

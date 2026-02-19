@@ -1,6 +1,6 @@
 {
   "db_name": "MySQL",
-  "query": "\n            SELECT \n                s.nis,\n                u.name AS nama,\n                k.nama AS kelas,\n                s.tingkat,\n                b.tempat_lahir,\n                DATE_FORMAT(b.tanggal_lahir, '%Y-%m-%d') AS tanggal_lahir,\n                b.nama_ayah,\n                b.nama_ibu,\n                b.alamat,\n                b.telepon\n            FROM siswas s\n            JOIN kelas k ON k.id = s.kelas_id\n            JOIN users u ON u.nis = s.nis\n            LEFT JOIN biodatas b ON b.nis = s.nis\n            WHERE s.tahun = ?\n              AND s.kelas_id = ?\n              AND u.name LIKE ?\n            ORDER BY k.tingkat, k.nama, u.name\n            LIMIT ? OFFSET ?\n            ",
+  "query": "\n            SELECT \n                s.nis,\n                u.name AS nama,\n                k.nama AS kelas,\n                s.tingkat,\n                b.tempat_lahir,\n                DATE_FORMAT(b.tanggal_lahir, '%Y-%m-%d') AS tanggal_lahir,\n                b.nama_ayah,\n                b.nama_ibu,\n                b.alamat_lengkap,\n                b.telepon\n            FROM siswas s\n            JOIN kelas k ON k.id = s.kelas_id\n            JOIN users u ON u.nis = s.nis\n            LEFT JOIN biodatas b ON b.nis = s.nis\n            WHERE s.tahun = ?\n              AND s.kelas_id = ?\n              AND u.name LIKE ?\n            ORDER BY k.tingkat, k.nama, u.name\n            LIMIT ? OFFSET ?\n            ",
   "describe": {
     "columns": [
       {
@@ -8,8 +8,8 @@
         "name": "nis",
         "type_info": {
           "type": "VarString",
-          "flags": "",
-          "max_size": 120
+          "flags": "MULTIPLE_KEY",
+          "max_size": 80
         }
       },
       {
@@ -17,8 +17,8 @@
         "name": "nama",
         "type_info": {
           "type": "VarString",
-          "flags": "NOT_NULL | NO_DEFAULT_VALUE",
-          "max_size": 1020
+          "flags": "NOT_NULL | MULTIPLE_KEY | NO_DEFAULT_VALUE",
+          "max_size": 400
         }
       },
       {
@@ -27,16 +27,16 @@
         "type_info": {
           "type": "VarString",
           "flags": "NOT_NULL | NO_DEFAULT_VALUE",
-          "max_size": 1020
+          "max_size": 200
         }
       },
       {
         "ordinal": 3,
         "name": "tingkat",
         "type_info": {
-          "type": "Long",
-          "flags": "",
-          "max_size": 11
+          "type": "VarString",
+          "flags": "NOT_NULL | NO_DEFAULT_VALUE",
+          "max_size": 12
         }
       },
       {
@@ -45,7 +45,7 @@
         "type_info": {
           "type": "VarString",
           "flags": "",
-          "max_size": 1020
+          "max_size": 400
         }
       },
       {
@@ -63,7 +63,7 @@
         "type_info": {
           "type": "VarString",
           "flags": "",
-          "max_size": 1020
+          "max_size": 400
         }
       },
       {
@@ -72,16 +72,16 @@
         "type_info": {
           "type": "VarString",
           "flags": "",
-          "max_size": 1020
+          "max_size": 400
         }
       },
       {
         "ordinal": 8,
-        "name": "alamat",
+        "name": "alamat_lengkap",
         "type_info": {
-          "type": "VarString",
-          "flags": "",
-          "max_size": 1020
+          "type": "Blob",
+          "flags": "BLOB",
+          "max_size": 262140
         }
       },
       {
@@ -101,7 +101,7 @@
       true,
       false,
       false,
-      true,
+      false,
       true,
       true,
       true,
@@ -110,5 +110,5 @@
       true
     ]
   },
-  "hash": "f3fb6e632c02a1b8cc10e2eb3cbfc2d3299d9f386c70a3fdee0a6af047ea0ff5"
+  "hash": "c1446a48f6007bb0e018e2e635697de1c0973dda1018773cd5374b47b49e2c6c"
 }

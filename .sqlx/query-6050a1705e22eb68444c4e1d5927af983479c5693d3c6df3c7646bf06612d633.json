@@ -1,6 +1,6 @@
 {
   "db_name": "MySQL",
-  "query": "SELECT name, foto FROM users WHERE id = ?",
+  "query": "SELECT name, foto, nis FROM users WHERE id = ?",
   "describe": {
     "columns": [
       {
@@ -8,8 +8,8 @@
         "name": "name",
         "type_info": {
           "type": "VarString",
-          "flags": "NOT_NULL | NO_DEFAULT_VALUE",
-          "max_size": 1020
+          "flags": "NOT_NULL | MULTIPLE_KEY | NO_DEFAULT_VALUE",
+          "max_size": 400
         }
       },
       {
@@ -20,6 +20,15 @@
           "flags": "",
           "max_size": 1020
         }
+      },
+      {
+        "ordinal": 2,
+        "name": "nis",
+        "type_info": {
+          "type": "VarString",
+          "flags": "UNIQUE_KEY",
+          "max_size": 80
+        }
       }
     ],
     "parameters": {
@@ -27,8 +36,9 @@
     },
     "nullable": [
       false,
+      true,
       true
     ]
   },
-  "hash": "813dbf4b0d559adc9ab00cc7a4de9fd062d8c027f19dec7190c59451d32acfc5"
+  "hash": "6050a1705e22eb68444c4e1d5927af983479c5693d3c6df3c7646bf06612d633"
 }
