@@ -116,6 +116,7 @@ pub async fn ujian_konfirmasi_token(
         return Html(page.0).into_response();
     }
 
+    let tahun = data_tahun();
     let token_row = sqlx::query_as::<_, TokenLookupRow>(
         r#"
         SELECT
@@ -130,11 +131,13 @@ pub async fn ujian_konfirmasi_token(
           AND u.is_active = 1
           AND (t.expired_at IS NULL OR t.expired_at > NOW())
           AND (u.jurusan = 'UMUM' OR u.jurusan = ?)
+          AND u.tahun = ?
         LIMIT 1
         "#,
     )
     .bind(&token)
     .bind(&jurusan)
+    .bind(&tahun)
     .fetch_optional(&db)
     .await
     .unwrap_or(None);
@@ -735,6 +738,7 @@ async fn build_gate_data(
         .and_then(|p| p.jurusan.clone())
         .unwrap_or_else(|| "UMUM".to_string());
 
+    let tahun = data_tahun();
     let active_ujian = sqlx::query_as::<_, ActiveExamRow>(
         r#"
         SELECT
@@ -750,11 +754,13 @@ async fn build_gate_data(
           AND t.is_active = 1
           AND (t.expired_at IS NULL OR t.expired_at > NOW())
           AND (u.jurusan = 'UMUM' OR u.jurusan = ?)
+          AND u.tahun = ?
         ORDER BY t.created_at DESC
         LIMIT 1
         "#,
     )
     .bind(&jurusan)
+    .bind(&tahun)
     .fetch_optional(db)
     .await
     .unwrap_or(None);

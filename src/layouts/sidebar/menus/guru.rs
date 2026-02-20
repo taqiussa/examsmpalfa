@@ -29,9 +29,15 @@ pub fn menu(current_path: &str) -> Vec<SidebarItem> {
         },
         SidebarItem {
             kind: "link",
-            href: "/ujian/uraian",
+            href: "/review-uraian",
             label: "Review Uraian",
-            active: is_active(current_path, "/ujian/uraian"),
+            active: is_active(current_path, "/review-uraian"),
+        },
+        SidebarItem {
+            kind: "link",
+            href: "/hasil-nilai",
+            label: "Hasil Nilai",
+            active: is_active(current_path, "/hasil-nilai"),
         },
     ]
 }

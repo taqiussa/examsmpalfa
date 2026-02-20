@@ -13,13 +13,14 @@
 
         <form id="uraian-filter" class="flex flex-wrap items-end gap-3"
                 method="get"
-                action="/ujian/uraian"
-                hx-get="/ujian/uraian/table"
+                action="/review-uraian"
+                hx-get="/review-uraian/table"
                 hx-target="#uraian-table"
                 hx-swap="innerHTML"
                 hx-push-url="true"
                 hx-indicator="#uraian-loading"
                 hx-trigger="change from:select">
+                {% include "components/tahun.html" %}
                 <div class="flex-1 min-w-[240px]">
                         <label class="block text-sm text-slate-600 mb-1">Ujian (Mata Pelajaran)</label>
                         <select name="ujian_id" class="input">
@@ -34,7 +35,7 @@
         </form>
 
         <div id="uraian-table"
-                hx-get="/ujian/uraian/table"
+                hx-get="/review-uraian/table"
                 hx-trigger="load, refresh-uraian from:body"
                 hx-include="#uraian-filter"
                 hx-indicator="#uraian-loading"></div>

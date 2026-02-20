@@ -13,6 +13,7 @@ use uuid::Uuid;
 
 use crate::config::s3::S3State;
 use crate::utils::{page_context::PageContext, render::render, tahun::data_tahun};
+use crate::utils::list_kelas::list_kelas;
 
 use super::absensi_kelas::Htmx;
 
@@ -45,11 +46,22 @@ pub struct UjianFilter {
 #[derive(Deserialize)]
 pub struct ProgressFilter {
     pub ujian_id: Option<i64>,
+    pub tahun: Option<String>,
 }
 
 #[derive(Deserialize)]
 pub struct UraianFilter {
     pub ujian_id: Option<i64>,
+    pub tahun: Option<String>,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct NilaiFilter {
+    #[serde(default, deserialize_with = "empty_string_as_none_i64")]
+    pub kelas_id: Option<i64>,
+    #[serde(default, deserialize_with = "empty_string_as_none_i64")]
+    pub mata_pelajaran_id: Option<i64>,
+    pub tahun: Option<String>,
 }
 
 #[derive(Clone, Serialize, FromRow)]
@@ -82,6 +94,18 @@ pub struct UraianScoreForm {
     pub nilai_uraian: i32,
 }
 
+#[derive(Serialize, FromRow)]
+struct NilaiKelasRow {
+    nis: String,
+    nama: Option<String>,
+    kelas: Option<String>,
+    total_benar: Option<i64>,
+    total_salah: Option<i64>,
+    nilai_pg: Option<i64>,
+    nilai_uraian: Option<i64>,
+    total_nilai: Option<i64>,
+}
+
 #[derive(Serialize)]
 struct CreateUjianData {
     tahun: String,
@@ -103,6 +127,7 @@ struct MapelOption {
 
 #[derive(Deserialize)]
 pub struct CreateUjianForm {
+    pub tahun: String,
     pub mata_pelajaran_id: i64,
     pub jurusan: String,
     pub title: String,
@@ -255,7 +280,7 @@ async fn fetch_mapel_options(db: &MySqlPool) -> Vec<MapelOption> {
     .unwrap_or_default()
 }
 
-async fn fetch_ujian_options(db: &MySqlPool) -> Vec<UjianOption> {
+async fn fetch_ujian_options(db: &MySqlPool, tahun: &str) -> Vec<UjianOption> {
     sqlx::query_as::<_, UjianOption>(
         r#"
         SELECT
@@ -265,10 +290,12 @@ async fn fetch_ujian_options(db: &MySqlPool) -> Vec<UjianOption> {
             u.is_active
         FROM ujians u
         JOIN mata_pelajarans mp ON mp.id = u.mata_pelajaran_id
+        WHERE u.tahun = ?
         ORDER BY u.created_at DESC
         LIMIT 200
         "#,
     )
+    .bind(tahun)
     .fetch_all(db)
     .await
     .unwrap_or_default()
@@ -317,11 +344,13 @@ pub async fn ujian_table(
             DATE_FORMAT(u.created_at, '%Y-%m-%d %H:%i') as created_at
         FROM ujians u
         JOIN mata_pelajarans mp ON mp.id = u.mata_pelajaran_id
-        WHERE (u.title LIKE ? OR u.description LIKE ? OR mp.nama LIKE ?)
+        WHERE u.tahun = ?
+          AND (u.title LIKE ? OR u.description LIKE ? OR mp.nama LIKE ?)
         ORDER BY u.created_at DESC
         LIMIT 100
         "#,
     )
+    .bind(&tahun)
     .bind(&search_like)
     .bind(&search_like)
     .bind(&search_like)
@@ -373,6 +402,9 @@ pub async fn ujian_store(
     if form.title.trim().is_empty() {
         errors.insert("title".to_string(), "Judul ujian wajib diisi".to_string());
     }
+    if form.tahun.trim().is_empty() {
+        errors.insert("tahun".to_string(), "Tahun ajaran wajib dipilih".to_string());
+    }
     if form.mata_pelajaran_id <= 0 {
         errors.insert(
             "mata_pelajaran_id".to_string(),
@@ -386,7 +418,7 @@ pub async fn ujian_store(
 
     if !errors.is_empty() {
         let data = CreateUjianData {
-            tahun: data_tahun(),
+            tahun: form.tahun.clone(),
             title: form.title,
             description: form.description.unwrap_or_default(),
             tanggal: form.tanggal,
@@ -406,12 +438,13 @@ pub async fn ujian_store(
     let result = sqlx::query(
         r#"
         INSERT INTO ujians
-            (mata_pelajaran_id, jurusan, title, description, tanggal, waktu_menit, is_active, created_by, created_at, updated_at)
+            (mata_pelajaran_id, tahun, jurusan, title, description, tanggal, waktu_menit, is_active, created_by, created_at, updated_at)
         VALUES
-            (?, ?, ?, ?, ?, ?, FALSE, ?, NOW(), NOW())
+            (?, ?, ?, ?, ?, ?, ?, FALSE, ?, NOW(), NOW())
         "#,
     )
     .bind(form.mata_pelajaran_id)
+    .bind(&form.tahun)
     .bind(&jurusan)
     .bind(&form.title)
     .bind(&form.description)
@@ -581,9 +614,11 @@ pub async fn ujian_show(
 
 #[derive(Serialize)]
 struct UjianProgressData {
+    tahun: String,
     list_ujian: Vec<UjianOption>,
     active_ujian: Option<UjianOption>,
     selected_ujian: Option<UjianDetailRow>,
+    list_token: Vec<TokenRow>,
     list_hasil: Vec<HasilRow>,
 }
 
@@ -599,11 +634,13 @@ pub async fn ujian_progress(
     Query(filter): Query<ProgressFilter>,
     axum::Extension(db): axum::Extension<MySqlPool>,
 ) -> axum::response::Response {
-    let list_ujian = fetch_ujian_options(&db).await;
+    let tahun = filter.tahun.clone().unwrap_or_else(data_tahun);
+    let list_ujian = fetch_ujian_options(&db, &tahun).await;
     let active_ujian = list_ujian.iter().find(|u| u.is_active == 1).cloned();
 
     let mut selected_ujian: Option<UjianDetailRow> = None;
     let mut list_hasil: Vec<HasilRow> = Vec::new();
+    let mut list_token: Vec<TokenRow> = Vec::new();
 
     if let Some(ujian_id) = filter.ujian_id {
         let _ = sqlx::query(
@@ -661,6 +698,25 @@ pub async fn ujian_progress(
         .unwrap_or(None);
 
         if selected_ujian.is_some() {
+            list_token = sqlx::query_as::<_, TokenRow>(
+                r#"
+                SELECT
+                    id,
+                    token,
+                    is_active,
+                    DATE_FORMAT(expired_at, '%Y-%m-%d %H:%i') as expired_at,
+                    DATE_FORMAT(created_at, '%Y-%m-%d %H:%i') as created_at
+                FROM ujian_tokens
+                WHERE ujian_id = ?
+                ORDER BY created_at DESC
+                LIMIT 50
+                "#,
+            )
+            .bind(ujian_id)
+            .fetch_all(&db)
+            .await
+            .unwrap_or_default();
+
             list_hasil = sqlx::query_as::<_, HasilRow>(
                 r#"
                 SELECT
@@ -687,9 +743,11 @@ pub async fn ujian_progress(
     }
 
     let data = UjianProgressData {
+        tahun,
         list_ujian,
         active_ujian,
         selected_ujian,
+        list_token,
         list_hasil,
     };
 
@@ -711,13 +769,15 @@ pub async fn ujian_progress(
 pub async fn ujian_progress_active_panel(
     ctx: PageContext,
     Htmx(is_htmx): Htmx,
+    Query(filter): Query<ProgressFilter>,
     axum::Extension(db): axum::Extension<MySqlPool>,
 ) -> axum::response::Response {
     if !is_htmx {
         return Redirect::to("/progress-ujian").into_response();
     }
 
-    let list_ujian = fetch_ujian_options(&db).await;
+    let tahun = filter.tahun.clone().unwrap_or_else(data_tahun);
+    let list_ujian = fetch_ujian_options(&db, &tahun).await;
     let active_ujian = list_ujian.iter().find(|u| u.is_active == 1).cloned();
 
     let data = UjianActivePanelData { active_ujian };
@@ -732,8 +792,19 @@ pub async fn ujian_progress_active_panel(
 
 #[derive(Serialize)]
 struct UraianReviewPageData {
+    tahun: String,
     list_ujian: Vec<UjianOption>,
     selected_id: i64,
+}
+
+#[derive(Serialize)]
+struct NilaiKelasPageData {
+    tahun: String,
+    list_kelas: Vec<crate::utils::list_kelas::ListKelas>,
+    list_mapel: Vec<MapelOption>,
+    kelas_id: i64,
+    mata_pelajaran_id: i64,
+    require_kelas: bool,
 }
 
 pub async fn ujian_uraian_review(
@@ -741,10 +812,12 @@ pub async fn ujian_uraian_review(
     Query(filter): Query<UraianFilter>,
     axum::Extension(db): axum::Extension<MySqlPool>,
 ) -> Html<String> {
-    let list_ujian = fetch_ujian_options(&db).await;
+    let tahun = filter.tahun.clone().unwrap_or_else(data_tahun);
+    let list_ujian = fetch_ujian_options(&db, &tahun).await;
     let selected_id = filter.ujian_id.unwrap_or(0);
 
     let data = UraianReviewPageData {
+        tahun,
         list_ujian,
         selected_id,
     };
@@ -760,14 +833,22 @@ pub async fn ujian_uraian_table(
 ) -> axum::response::Response {
     if !is_htmx {
         let url = match filter.ujian_id {
-            Some(id) => format!("/ujian/uraian?ujian_id={}", id),
-            None => "/ujian/uraian".to_string(),
+            Some(id) => format!(
+                "/review-uraian?ujian_id={}&tahun={}",
+                id,
+                filter.tahun.clone().unwrap_or_else(data_tahun)
+            ),
+            None => format!(
+                "/review-uraian?tahun={}",
+                filter.tahun.clone().unwrap_or_else(data_tahun)
+            ),
         };
         return Redirect::to(&url).into_response();
     }
 
     let mut list: Vec<UraianJawabanRow> = Vec::new();
     if let Some(ujian_id) = filter.ujian_id {
+        let tahun = filter.tahun.clone().unwrap_or_else(data_tahun);
         list = sqlx::query_as::<_, UraianJawabanRow>(
             r#"
             SELECT
@@ -783,15 +864,18 @@ pub async fn ujian_uraian_table(
                 COALESCE(s.bobot_nilai, 1) as bobot_nilai
             FROM ujian_jawabans j
             JOIN soals s ON s.id = j.soal_id
+            JOIN ujians uj ON uj.id = j.ujian_id
             LEFT JOIN users u ON u.nis = j.nis
             WHERE j.ujian_id = ?
               AND s.kategori = 'Uraian'
+              AND uj.tahun = ?
             ORDER BY
                 CASE WHEN j.status_uraian IS NULL THEN 0 ELSE 1 END,
                 j.updated_at DESC
             "#,
         )
         .bind(ujian_id)
+        .bind(&tahun)
         .fetch_all(&db)
         .await
         .unwrap_or_default();
@@ -901,6 +985,152 @@ pub async fn ujian_uraian_score(
     }
 }
 
+pub async fn nilai_kelas_mapel_page(
+    ctx: PageContext,
+    Query(filter): Query<NilaiFilter>,
+    axum::Extension(db): axum::Extension<MySqlPool>,
+) -> Html<String> {
+    let list_kelas = list_kelas(&db).await.unwrap_or_default();
+    let list_mapel = fetch_mapel_options(&db).await;
+    let tahun = filter.tahun.clone().unwrap_or_else(data_tahun);
+
+    let data = NilaiKelasPageData {
+        tahun,
+        list_kelas,
+        list_mapel,
+        kelas_id: filter.kelas_id.unwrap_or(0),
+        mata_pelajaran_id: filter.mata_pelajaran_id.unwrap_or(0),
+        require_kelas: true,
+    };
+
+    render(
+        &ctx,
+        "guru/ujian/nilai_kelas_mapel.html",
+        "Nilai Kelas Mapel",
+        data,
+    )
+}
+
+pub async fn nilai_kelas_mapel_table(
+    ctx: PageContext,
+    Htmx(is_htmx): Htmx,
+    Query(filter): Query<NilaiFilter>,
+    axum::Extension(db): axum::Extension<MySqlPool>,
+) -> axum::response::Response {
+    if !is_htmx {
+        let url = format!(
+            "/hasil-nilai?kelas_id={}&mata_pelajaran_id={}&tahun={}",
+            filter.kelas_id.unwrap_or(0),
+            filter.mata_pelajaran_id.unwrap_or(0),
+            filter.tahun.clone().unwrap_or_else(data_tahun)
+        );
+        return Redirect::to(&url).into_response();
+    }
+
+    let kelas_id = filter.kelas_id.unwrap_or(0);
+    let mata_pelajaran_id = filter.mata_pelajaran_id.unwrap_or(0);
+    let tahun = filter.tahun.clone().unwrap_or_else(data_tahun);
+    let mut rows: Vec<NilaiKelasRow> = Vec::new();
+
+    if kelas_id > 0 {
+        rows = sqlx::query_as::<_, NilaiKelasRow>(
+            r#"
+            SELECT
+                s.nis,
+                u.name as nama,
+                k.nama as kelas,
+                NULL as total_benar,
+                NULL as total_salah,
+                NULL as nilai_pg,
+                NULL as nilai_uraian,
+                NULL as total_nilai
+            FROM siswas s
+            JOIN kelas k ON k.id = s.kelas_id
+            LEFT JOIN users u ON u.nis = s.nis
+            WHERE s.kelas_id = ?
+              AND s.tahun = ?
+            ORDER BY u.name IS NULL, u.name ASC, s.nis ASC
+            "#,
+        )
+        .bind(kelas_id)
+        .bind(&tahun)
+        .fetch_all(&db)
+        .await
+        .unwrap_or_default();
+
+        if mata_pelajaran_id > 0 {
+            let nilai_map: std::collections::HashMap<String, (i64, i64, i64, i64, i64)> =
+                sqlx::query_as::<_, (String, i64, i64, i64, i64, i64)>(
+                    r#"
+                    SELECT
+                        j.nis,
+                        SUM(CASE WHEN s.kategori = 'Pilihan Ganda' AND j.is_benar = 1 THEN 1 ELSE 0 END) as total_benar,
+                        SUM(CASE WHEN s.kategori = 'Pilihan Ganda' AND j.is_benar = 0 THEN 1 ELSE 0 END) as total_salah,
+                        SUM(CASE WHEN s.kategori = 'Pilihan Ganda' THEN COALESCE(j.bobot_nilai, 0) ELSE 0 END) as nilai_pg,
+                        SUM(CASE WHEN s.kategori = 'Uraian' THEN COALESCE(j.nilai_uraian, 0) ELSE 0 END) as nilai_uraian,
+                        SUM(CASE WHEN s.kategori = 'Pilihan Ganda' THEN COALESCE(j.bobot_nilai, 0) ELSE 0 END)
+                            + SUM(CASE WHEN s.kategori = 'Uraian' THEN COALESCE(j.nilai_uraian, 0) ELSE 0 END) as total_nilai
+                    FROM ujian_jawabans j
+                    JOIN ujians uj ON uj.id = j.ujian_id
+                    JOIN soals s ON s.id = j.soal_id
+                    JOIN ujian_pesertas p
+                        ON p.ujian_id = j.ujian_id
+                        AND p.nis = j.nis
+                        AND p.status = 'submitted'
+                    WHERE uj.mata_pelajaran_id = ?
+                      AND uj.tahun = ?
+                    GROUP BY j.nis
+                    "#,
+                )
+                .bind(mata_pelajaran_id)
+                .bind(&tahun)
+                .fetch_all(&db)
+                .await
+                .unwrap_or_default()
+                .into_iter()
+                .map(|(nis, benar, salah, pg, uraian, total)| (nis, (benar, salah, pg, uraian, total)))
+                .collect();
+
+            for row in &mut rows {
+                if let Some((benar, salah, pg, uraian, total)) = nilai_map.get(&row.nis) {
+                    row.total_benar = Some(*benar);
+                    row.total_salah = Some(*salah);
+                    row.nilai_pg = Some(*pg);
+                    row.nilai_uraian = Some(*uraian);
+                    row.total_nilai = Some(*total);
+                }
+            }
+        }
+    }
+
+    let mut tera_ctx = Context::new();
+    tera_ctx.insert("rows", &rows);
+    tera_ctx.insert("kelas_id", &kelas_id);
+    tera_ctx.insert("mata_pelajaran_id", &mata_pelajaran_id);
+
+    let rendered = ctx
+        .tera
+        .render("guru/ujian/_nilai_kelas_mapel_table.html", &tera_ctx)
+        .unwrap();
+
+    Html(rendered).into_response()
+}
+
+fn empty_string_as_none_i64<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let opt = Option::<String>::deserialize(deserializer)?;
+    Ok(opt.and_then(|s| {
+        let s = s.trim().to_string();
+        if s.is_empty() {
+            None
+        } else {
+            s.parse::<i64>().ok()
+        }
+    }))
+}
+
 pub async fn ujian_delete(
     Htmx(is_htmx): Htmx,
     Path(ujian_id): Path<i64>,
@@ -941,9 +1171,20 @@ pub async fn ujian_toggle_active(
     }
 
     if form.active == 1 {
-        let _ = sqlx::query("UPDATE ujians SET is_active = 0, updated_at = NOW()")
+        let tahun: Option<String> = sqlx::query_scalar("SELECT tahun FROM ujians WHERE id = ? LIMIT 1")
+            .bind(ujian_id)
+            .fetch_optional(&db)
+            .await
+            .ok()
+            .flatten();
+        if let Some(tahun) = tahun {
+            let _ = sqlx::query(
+                "UPDATE ujians SET is_active = 0, updated_at = NOW() WHERE tahun = ?",
+            )
+            .bind(tahun)
             .execute(&db)
             .await;
+        }
     }
 
     let result = sqlx::query("UPDATE ujians SET is_active = ?, updated_at = NOW() WHERE id = ?")
@@ -1004,6 +1245,7 @@ pub async fn ujian_toggle_active(
 pub async fn ujian_generate_token(
     ctx: PageContext,
     Htmx(is_htmx): Htmx,
+    req_headers: HeaderMap,
     Path(ujian_id): Path<i64>,
     axum::Extension(db): axum::Extension<MySqlPool>,
 ) -> axum::response::Response {
@@ -1034,19 +1276,43 @@ pub async fn ujian_generate_token(
     match result {
         Ok(_) => {
             let mut headers = flash_success("Token ujian berhasil dibuat.");
-            headers.insert(
-                "HX-Redirect",
-                format!("/ujian/{}", ujian_id).parse().unwrap(),
-            );
+            let is_progress_page = req_headers
+                .get("HX-Current-URL")
+                .and_then(|v| v.to_str().ok())
+                .map(|v| v.contains("/progress-ujian"))
+                .unwrap_or(false);
+            if !is_progress_page {
+                headers.insert(
+                    "HX-Redirect",
+                    format!("/ujian/{}", ujian_id).parse().unwrap(),
+                );
+            } else {
+                headers.insert(
+                    "HX-Trigger-After-Settle",
+                    "refresh-progress".parse().unwrap(),
+                );
+            }
             (headers, Html(String::new())).into_response()
         }
         Err(e) => {
             eprintln!("Error generating ujian token: {:?}", e);
             let mut headers = flash_error("Gagal membuat token ujian.");
-            headers.insert(
-                "HX-Redirect",
-                format!("/ujian/{}", ujian_id).parse().unwrap(),
-            );
+            let is_progress_page = req_headers
+                .get("HX-Current-URL")
+                .and_then(|v| v.to_str().ok())
+                .map(|v| v.contains("/progress-ujian"))
+                .unwrap_or(false);
+            if !is_progress_page {
+                headers.insert(
+                    "HX-Redirect",
+                    format!("/ujian/{}", ujian_id).parse().unwrap(),
+                );
+            } else {
+                headers.insert(
+                    "HX-Trigger-After-Settle",
+                    "refresh-progress".parse().unwrap(),
+                );
+            }
             (headers, Html(String::new())).into_response()
         }
     }
@@ -1054,6 +1320,7 @@ pub async fn ujian_generate_token(
 
 pub async fn ujian_toggle_token(
     Htmx(is_htmx): Htmx,
+    req_headers: HeaderMap,
     Path((ujian_id, token_id)): Path<(i64, i64)>,
     axum::Extension(db): axum::Extension<MySqlPool>,
     Form(form): Form<ToggleAktifForm>,
@@ -1072,19 +1339,83 @@ pub async fn ujian_toggle_token(
     match result {
         Ok(_) => {
             let mut headers = flash_success("Status token berhasil diperbarui.");
-            headers.insert(
-                "HX-Redirect",
-                format!("/ujian/{}", ujian_id).parse().unwrap(),
-            );
+            let is_progress_page = req_headers
+                .get("HX-Current-URL")
+                .and_then(|v| v.to_str().ok())
+                .map(|v| v.contains("/progress-ujian"))
+                .unwrap_or(false);
+            if !is_progress_page {
+                headers.insert(
+                    "HX-Redirect",
+                    format!("/ujian/{}", ujian_id).parse().unwrap(),
+                );
+            } else {
+                headers.insert(
+                    "HX-Trigger-After-Settle",
+                    "refresh-progress".parse().unwrap(),
+                );
+            }
             (headers, Html(String::new())).into_response()
         }
         Err(e) => {
             eprintln!("Error toggling token active: {:?}", e);
             let mut headers = flash_error("Gagal mengubah status token.");
-            headers.insert(
-                "HX-Redirect",
-                format!("/ujian/{}", ujian_id).parse().unwrap(),
-            );
+            let is_progress_page = req_headers
+                .get("HX-Current-URL")
+                .and_then(|v| v.to_str().ok())
+                .map(|v| v.contains("/progress-ujian"))
+                .unwrap_or(false);
+            if !is_progress_page {
+                headers.insert(
+                    "HX-Redirect",
+                    format!("/ujian/{}", ujian_id).parse().unwrap(),
+                );
+            } else {
+                headers.insert(
+                    "HX-Trigger-After-Settle",
+                    "refresh-progress".parse().unwrap(),
+                );
+            }
+            (headers, Html(String::new())).into_response()
+        }
+    }
+}
+
+pub async fn ujian_delete_token(
+    Htmx(is_htmx): Htmx,
+    req_headers: HeaderMap,
+    Path((ujian_id, token_id)): Path<(i64, i64)>,
+    axum::Extension(db): axum::Extension<MySqlPool>,
+) -> axum::response::Response {
+    if !is_htmx {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
+
+    let result = sqlx::query("DELETE FROM ujian_tokens WHERE id = ? AND ujian_id = ?")
+        .bind(token_id)
+        .bind(ujian_id)
+        .execute(&db)
+        .await;
+
+    match result {
+        Ok(_) => {
+            let mut headers = flash_success("Token berhasil dihapus.");
+            let is_progress_page = req_headers
+                .get("HX-Current-URL")
+                .and_then(|v| v.to_str().ok())
+                .map(|v| v.contains("/progress-ujian"))
+                .unwrap_or(false);
+            if is_progress_page {
+                headers.insert(
+                    "HX-Trigger-After-Settle",
+                    "refresh-progress".parse().unwrap(),
+                );
+            }
+            (headers, Html(String::new())).into_response()
+        }
+        Err(e) => {
+            eprintln!("Error deleting token: {:?}", e);
+            let headers = flash_error("Gagal menghapus token.");
             (headers, Html(String::new())).into_response()
         }
     }

@@ -1,0 +1,43 @@
+{% if kelas_id == 0 %}
+<div class="text-sm text-slate-500">Silakan pilih kelas terlebih dahulu.</div>
+{% else %}
+<div class="bg-white border border-slate-200 rounded-lg p-4">
+        <div class="overflow-auto">
+                <table class="w-full text-sm border border-slate-200 rounded">
+                        <thead class="bg-slate-100">
+                                <tr>
+                                        <th class="border px-2 py-1 w-12">No.</th>
+                                        <th class="border px-2 py-1 text-left">Siswa</th>
+                                        <th class="border px-2 py-1 text-center">Benar</th>
+                                        <th class="border px-2 py-1 text-center">Salah</th>
+                                        <th class="border px-2 py-1 text-center">Nilai PG</th>
+                                        <th class="border px-2 py-1 text-center">Nilai Uraian</th>
+                                        <th class="border px-2 py-1 text-center">Total Nilai</th>
+                                </tr>
+                        </thead>
+                        <tbody>
+                                {% for r in rows %}
+                                <tr>
+                                        <td class="border px-2 py-1 text-center">{{ loop.index }}</td>
+                                        <td class="border px-2 py-1">
+                                                <div class="font-semibold">{{ r.nama | default(value="NIS " ~ r.nis) }}</div>
+                                                <div class="text-xs text-slate-500">{{ r.nis }}</div>
+                                        </td>
+                                        <td class="border px-2 py-1 text-center">{{ r.total_benar | default(value="-") }}</td>
+                                        <td class="border px-2 py-1 text-center">{{ r.total_salah | default(value="-") }}</td>
+                                        <td class="border px-2 py-1 text-center">{{ r.nilai_pg | default(value="-") }}</td>
+                                        <td class="border px-2 py-1 text-center">{{ r.nilai_uraian | default(value="-") }}</td>
+                                        <td class="border px-2 py-1 text-center font-semibold">{{ r.total_nilai | default(value="-") }}</td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                        <td colspan="7" class="border px-2 py-3 text-center text-slate-500">
+                                                Belum ada data nilai.
+                                        </td>
+                                </tr>
+                                {% endfor %}
+                        </tbody>
+                </table>
+        </div>
+</div>
+{% endif %}

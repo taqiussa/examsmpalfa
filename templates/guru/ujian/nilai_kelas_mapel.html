@@ -1,0 +1,46 @@
+{% extends "layouts/app.html" %}
+
+{% block content %}
+<div class="card space-y-6">
+        <div class="flex items-center justify-between">
+                <div>
+                        <h1 class="text-xl font-semibold">Nilai Siswa Per Kelas & Mapel</h1>
+                        <p class="text-sm text-slate-500 mt-1">Pilih kelas dan mata pelajaran untuk melihat rekap nilai.</p>
+                </div>
+        </div>
+
+        <div id="nilai-loading" class="hidden text-sm text-slate-500">Memuat data...</div>
+
+        <form id="nilai-filter" class="md:grid gap-4 md:grid-cols-4 space-y-2 md:space-y-0"
+                method="get"
+                action="/hasil-nilai"
+                hx-get="/hasil-nilai/table"
+                hx-target="#nilai-table"
+                hx-swap="innerHTML"
+                hx-push-url="true"
+                hx-indicator="#nilai-loading"
+                hx-trigger="change from:select">
+
+                {% include "components/tahun.html" %}
+                {% include "components/list-kelas.html" %}
+
+                <div class="flex flex-col space-y-1 capitalize text-md text-slate-600 col-span-2">
+                        <label class="text-sm text-slate-600">Mata Pelajaran</label>
+                        <select name="mata_pelajaran_id" class="input">
+                                <option value="">Pilih mata pelajaran...</option>
+                                {% for m in data.list_mapel %}
+                                <option value="{{ m.id }}" {% if data.mata_pelajaran_id==m.id %}selected{% endif %}>
+                                        {{ m.nama }}
+                                </option>
+                                {% endfor %}
+                        </select>
+                </div>
+        </form>
+
+        <div id="nilai-table"
+                hx-get="/hasil-nilai/table"
+                hx-trigger="load"
+                hx-include="#nilai-filter"
+                hx-indicator="#nilai-loading"></div>
+</div>
+{% endblock %}

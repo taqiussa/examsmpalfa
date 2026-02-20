@@ -13,6 +13,11 @@
         <form id="ujian-form" method="post" hx-post="/ujian/store" hx-target="#ujian-form" hx-swap="innerHTML"
                 class="space-y-6">
 
+                {% include "components/tahun.html" %}
+                {% if data.errors and data.errors.tahun %}
+                <p class="text-xs text-rose-500 mt-1">{{ data.errors.tahun }}</p>
+                {% endif %}
+
                 <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">
                                 Mata Pelajaran <span class="text-rose-500">*</span>
