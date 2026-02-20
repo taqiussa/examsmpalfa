@@ -69,13 +69,20 @@
         {% if data.can_add_soal %}
         <div class="flex items-center justify-between">
                 <h2 class="text-lg font-semibold">Daftar Soal</h2>
-                <a href="/ujian/{{ data.ujian.id }}/soal/create" class="button bg-sky-600 text-white hover:bg-sky-700">
-                        + Tambah Soal
-                </a>
+                <div class="flex items-center gap-3">
+                        <a href="/progress-ujian?ujian_id={{ data.ujian.id }}"
+                                class="text-sm text-sky-700 hover:text-sky-900">
+                                Lihat Progress Ujian →
+                        </a>
+                        <a href="/ujian/{{ data.ujian.id }}/soal/create"
+                                class="button bg-sky-600 text-white hover:bg-sky-700">
+                                + Tambah Soal
+                        </a>
+                </div>
         </div>
         {% endif %}
 
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 gap-4">
                 <div class="bg-white border border-slate-200 rounded-lg p-4 space-y-3">
                         <div class="flex items-center justify-between">
                                 <h3 class="text-base font-semibold text-slate-700">Token Ujian</h3>
@@ -118,57 +125,6 @@
                                 {% else %}
                                 <div class="text-sm text-slate-500">Belum ada token.</div>
                                 {% endfor %}
-                        </div>
-                </div>
-
-                <div class="bg-white border border-slate-200 rounded-lg p-4 space-y-3">
-                        <h3 class="text-base font-semibold text-slate-700">Hasil Siswa</h3>
-                        <div class="overflow-auto max-h-80">
-                                <table class="w-full text-sm border border-slate-200 rounded">
-                                        <thead class="bg-slate-100">
-                                                <tr>
-                                                        <th class="border px-2 py-1 text-left">Nama</th>
-                                                        <th class="border px-2 py-1 text-left">NIS</th>
-                                                        <th class="border px-2 py-1 text-center">Status</th>
-                                                        <th class="border px-2 py-1 text-center">Progress</th>
-                                                        <th class="border px-2 py-1 text-center">Nilai</th>
-                                                </tr>
-                                        </thead>
-                                        <tbody>
-                                                {% for h in data.list_hasil %}
-                                                <tr>
-                                                        <td class="border px-2 py-1">{{ h.nama }}</td>
-                                                        <td class="border px-2 py-1">{{ h.nis | default(value="-") }}
-                                                        </td>
-                                                        <td class="border px-2 py-1 text-center">
-                                                                {% if h.status == "submitted" %}
-                                                                <span
-                                                                        class="rounded bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">Submitted</span>
-                                                                {% else %}
-                                                                <span
-                                                                        class="rounded bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">Started</span>
-                                                                {% endif %}
-                                                        </td>
-                                                        <td class="border px-2 py-1 text-center">No. {{ h.last_nomor }}
-                                                        </td>
-                                                        <td class="border px-2 py-1 text-center">
-                                                                {% if h.status == "submitted" %}
-                                                                {{ h.total_nilai | default(value=0) }}
-                                                                {% else %}
-                                                                -
-                                                                {% endif %}
-                                                        </td>
-                                                </tr>
-                                                {% else %}
-                                                <tr>
-                                                        <td colspan="5"
-                                                                class="border px-2 py-3 text-center text-slate-500">
-                                                                Belum ada peserta.
-                                                        </td>
-                                                </tr>
-                                                {% endfor %}
-                                        </tbody>
-                                </table>
                         </div>
                 </div>
         </div>

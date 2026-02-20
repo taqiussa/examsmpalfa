@@ -1,0 +1,86 @@
+{% if data.selected_ujian %}
+<div class="flex flex-wrap items-center gap-3 border-t border-slate-200 pt-4">
+        <div class="flex items-center gap-3">
+                <div class="text-sm text-slate-500">Status Ujian:</div>
+                {% if data.selected_ujian.is_active %}
+                <span class="px-3 py-1 rounded-full text-sm bg-emerald-100 text-emerald-700">
+                        Aktif
+                </span>
+                {% else %}
+                <span class="px-3 py-1 rounded-full text-sm bg-slate-100 text-slate-600">
+                        Nonaktif
+                </span>
+                {% endif %}
+        </div>
+        <div>
+                {% if data.selected_ujian.is_active %}
+                <form hx-post="/ujian/{{ data.selected_ujian.id }}/toggle-active" hx-swap="none">
+                        <input type="hidden" name="active" value="0">
+                        <button type="submit" class="button bg-slate-600 text-white hover:bg-slate-700">
+                                Nonaktifkan
+                        </button>
+                </form>
+                {% else %}
+                <form hx-post="/ujian/{{ data.selected_ujian.id }}/toggle-active" hx-swap="none">
+                        <input type="hidden" name="active" value="1">
+                        <button type="submit" class="button bg-emerald-600 text-white hover:bg-emerald-700">
+                                Aktifkan Ujian
+                        </button>
+                </form>
+                {% endif %}
+        </div>
+</div>
+
+<div class="bg-white border border-slate-200 rounded-lg p-4 space-y-3">
+        <div class="flex items-center justify-between">
+                <h3 class="text-base font-semibold text-slate-700">Progress Siswa</h3>
+                <div class="text-sm text-slate-500">
+                        {{ data.selected_ujian.mata_pelajaran | default(value="-") }} - {{ data.selected_ujian.title }}
+                </div>
+        </div>
+        <div class="overflow-auto max-h-96">
+                <table class="w-full text-sm border border-slate-200 rounded">
+                        <thead class="bg-slate-100">
+                                <tr>
+                                        <th class="border px-2 py-1 text-left">Nama</th>
+                                        <th class="border px-2 py-1 text-left">NIS</th>
+                                        <th class="border px-2 py-1 text-center">Status</th>
+                                        <th class="border px-2 py-1 text-center">Progress</th>
+                                        <th class="border px-2 py-1 text-center">Nilai</th>
+                                </tr>
+                        </thead>
+                        <tbody>
+                                {% for h in data.list_hasil %}
+                                <tr>
+                                        <td class="border px-2 py-1">{{ h.nama }}</td>
+                                        <td class="border px-2 py-1">{{ h.nis | default(value="-") }}</td>
+                                        <td class="border px-2 py-1 text-center">
+                                                {% if h.status == "submitted" %}
+                                                <span class="rounded bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">Submitted</span>
+                                                {% else %}
+                                                <span class="rounded bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">Started</span>
+                                                {% endif %}
+                                        </td>
+                                        <td class="border px-2 py-1 text-center">No. {{ h.last_nomor }}</td>
+                                        <td class="border px-2 py-1 text-center">
+                                                {% if h.status == "submitted" %}
+                                                {{ h.total_nilai | default(value=0) }}
+                                                {% else %}
+                                                -
+                                                {% endif %}
+                                        </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                        <td colspan="5" class="border px-2 py-3 text-center text-slate-500">
+                                                Belum ada peserta.
+                                        </td>
+                                </tr>
+                                {% endfor %}
+                        </tbody>
+                </table>
+        </div>
+</div>
+{% else %}
+<div class="text-sm text-slate-500">Silakan pilih ujian terlebih dahulu.</div>
+{% endif %}

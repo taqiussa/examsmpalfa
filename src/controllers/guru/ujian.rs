@@ -42,6 +42,19 @@ pub struct UjianFilter {
     pub search: Option<String>,
 }
 
+#[derive(Deserialize)]
+pub struct ProgressFilter {
+    pub ujian_id: Option<i64>,
+}
+
+#[derive(Clone, Serialize, FromRow)]
+struct UjianOption {
+    id: i64,
+    title: String,
+    mata_pelajaran: Option<String>,
+    is_active: i8,
+}
+
 #[derive(Serialize)]
 struct CreateUjianData {
     tahun: String,
@@ -215,6 +228,25 @@ async fn fetch_mapel_options(db: &MySqlPool) -> Vec<MapelOption> {
     .unwrap_or_default()
 }
 
+async fn fetch_ujian_options(db: &MySqlPool) -> Vec<UjianOption> {
+    sqlx::query_as::<_, UjianOption>(
+        r#"
+        SELECT
+            u.id,
+            u.title,
+            mp.nama as mata_pelajaran,
+            u.is_active
+        FROM ujians u
+        JOIN mata_pelajarans mp ON mp.id = u.mata_pelajaran_id
+        ORDER BY u.created_at DESC
+        LIMIT 200
+        "#,
+    )
+    .fetch_all(db)
+    .await
+    .unwrap_or_default()
+}
+
 pub async fn ujian_index(
     ctx: PageContext,
     axum::Extension(_db): axum::Extension<MySqlPool>,
@@ -349,7 +381,7 @@ pub async fn ujian_store(
         INSERT INTO ujians
             (mata_pelajaran_id, jurusan, title, description, tanggal, waktu_menit, is_active, created_by, created_at, updated_at)
         VALUES
-            (?, ?, ?, ?, ?, ?, TRUE, ?, NOW(), NOW())
+            (?, ?, ?, ?, ?, ?, FALSE, ?, NOW(), NOW())
         "#,
     )
     .bind(form.mata_pelajaran_id)
@@ -520,6 +552,157 @@ pub async fn ujian_show(
     Html(html.0).into_response()
 }
 
+#[derive(Serialize)]
+struct UjianProgressData {
+    list_ujian: Vec<UjianOption>,
+    active_ujian: Option<UjianOption>,
+    selected_ujian: Option<UjianDetailRow>,
+    list_hasil: Vec<HasilRow>,
+}
+
+#[derive(Serialize)]
+struct UjianActivePanelData {
+    active_ujian: Option<UjianOption>,
+}
+
+pub async fn ujian_progress(
+    ctx: PageContext,
+    Htmx(is_htmx): Htmx,
+    headers: HeaderMap,
+    Query(filter): Query<ProgressFilter>,
+    axum::Extension(db): axum::Extension<MySqlPool>,
+) -> axum::response::Response {
+    let list_ujian = fetch_ujian_options(&db).await;
+    let active_ujian = list_ujian.iter().find(|u| u.is_active == 1).cloned();
+
+    let mut selected_ujian: Option<UjianDetailRow> = None;
+    let mut list_hasil: Vec<HasilRow> = Vec::new();
+
+    if let Some(ujian_id) = filter.ujian_id {
+        let _ = sqlx::query(
+            r#"
+            UPDATE ujian_pesertas p
+            LEFT JOIN (
+                SELECT
+                    j.ujian_id,
+                    j.nis,
+                    COALESCE(
+                        SUM(
+                            CASE
+                                WHEN j.pilihan = s.kunci_jawaban THEN COALESCE(s.bobot_nilai, 1)
+                                ELSE 0
+                            END
+                        ),
+                        0
+                    ) AS nilai_hitung
+                FROM ujian_jawabans j
+                JOIN soals s ON s.id = j.soal_id
+                WHERE j.ujian_id = ?
+                GROUP BY j.ujian_id, j.nis
+            ) x ON x.ujian_id = p.ujian_id AND x.nis = p.nis
+            SET p.total_nilai = COALESCE(x.nilai_hitung, 0),
+                p.updated_at = NOW()
+            WHERE p.ujian_id = ?
+              AND p.status = 'submitted'
+            "#,
+        )
+        .bind(ujian_id)
+        .bind(ujian_id)
+        .execute(&db)
+        .await;
+
+        selected_ujian = sqlx::query_as::<_, UjianDetailRow>(
+            r#"
+            SELECT
+                u.id,
+                u.title,
+                u.description,
+                u.tanggal,
+                u.waktu_menit,
+                COALESCE(u.total_soal, 0) as total_soal,
+                u.is_active,
+                u.jurusan,
+                mp.nama as mata_pelajaran
+            FROM ujians u
+            JOIN mata_pelajarans mp ON mp.id = u.mata_pelajaran_id
+            WHERE u.id = ?
+            "#,
+        )
+        .bind(ujian_id)
+        .fetch_optional(&db)
+        .await
+        .unwrap_or(None);
+
+        if selected_ujian.is_some() {
+            list_hasil = sqlx::query_as::<_, HasilRow>(
+                r#"
+                SELECT
+                    COALESCE(u.name, CONCAT('NIS ', p.nis)) as nama,
+                    p.nis,
+                    p.status,
+                    p.last_nomor,
+                    COALESCE(p.total_nilai, 0) as total_nilai,
+                    DATE_FORMAT(p.submitted_at, '%Y-%m-%d %H:%i') as submitted_at
+                FROM ujian_pesertas p
+                LEFT JOIN users u ON u.nis = p.nis
+                WHERE p.ujian_id = ?
+                ORDER BY
+                    CASE WHEN p.status = 'submitted' THEN 0 ELSE 1 END,
+                    p.submitted_at DESC,
+                    u.name ASC
+                "#,
+            )
+            .bind(ujian_id)
+            .fetch_all(&db)
+            .await
+            .unwrap_or_default();
+        }
+    }
+
+    let data = UjianProgressData {
+        list_ujian,
+        active_ujian,
+        selected_ujian,
+        list_hasil,
+    };
+
+    let is_boosted = headers
+        .get("HX-Boosted")
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v == "true")
+        .unwrap_or(false);
+
+    if is_htmx && !is_boosted {
+        let html = render(&ctx, "guru/ujian/_progress_content.html", "Progress Ujian", data);
+        Html(html.0).into_response()
+    } else {
+        let html = render(&ctx, "guru/ujian/progress.html", "Progress Ujian", data);
+        Html(html.0).into_response()
+    }
+}
+
+pub async fn ujian_progress_active_panel(
+    ctx: PageContext,
+    Htmx(is_htmx): Htmx,
+    axum::Extension(db): axum::Extension<MySqlPool>,
+) -> axum::response::Response {
+    if !is_htmx {
+        return Redirect::to("/progress-ujian").into_response();
+    }
+
+    let list_ujian = fetch_ujian_options(&db).await;
+    let active_ujian = list_ujian.iter().find(|u| u.is_active == 1).cloned();
+
+    let data = UjianActivePanelData { active_ujian };
+    let html = render(
+        &ctx,
+        "guru/ujian/_active_ujian_panel.html",
+        "Progress Ujian",
+        data,
+    );
+    Html(html.0).into_response()
+}
+
 pub async fn ujian_delete(
     Htmx(is_htmx): Htmx,
     Path(ujian_id): Path<i64>,
@@ -550,6 +733,7 @@ pub async fn ujian_delete(
 pub async fn ujian_toggle_active(
     _ctx: PageContext,
     Htmx(is_htmx): Htmx,
+    req_headers: HeaderMap,
     Path(ujian_id): Path<i64>,
     axum::Extension(db): axum::Extension<MySqlPool>,
     Form(form): Form<ToggleAktifForm>,
@@ -577,19 +761,43 @@ pub async fn ujian_toggle_active(
             } else {
                 "Ujian dinonaktifkan."
             });
-            headers.insert(
-                "HX-Redirect",
-                format!("/ujian/{}", ujian_id).parse().unwrap(),
-            );
+            let is_progress_page = req_headers
+                .get("HX-Current-URL")
+                .and_then(|v| v.to_str().ok())
+                .map(|v| v.contains("/progress-ujian"))
+                .unwrap_or(false);
+            if !is_progress_page {
+                headers.insert(
+                    "HX-Redirect",
+                    format!("/ujian/{}", ujian_id).parse().unwrap(),
+                );
+            } else {
+                headers.insert(
+                    "HX-Trigger-After-Settle",
+                    "refresh-active,refresh-progress".parse().unwrap(),
+                );
+            }
             (headers, Html(String::new())).into_response()
         }
         Err(e) => {
             eprintln!("Error toggling ujian active: {:?}", e);
             let mut headers = flash_error("Gagal mengubah status ujian.");
-            headers.insert(
-                "HX-Redirect",
-                format!("/ujian/{}", ujian_id).parse().unwrap(),
-            );
+            let is_progress_page = req_headers
+                .get("HX-Current-URL")
+                .and_then(|v| v.to_str().ok())
+                .map(|v| v.contains("/progress-ujian"))
+                .unwrap_or(false);
+            if !is_progress_page {
+                headers.insert(
+                    "HX-Redirect",
+                    format!("/ujian/{}", ujian_id).parse().unwrap(),
+                );
+            } else {
+                headers.insert(
+                    "HX-Trigger-After-Settle",
+                    "refresh-active,refresh-progress".parse().unwrap(),
+                );
+            }
             (headers, Html(String::new())).into_response()
         }
     }

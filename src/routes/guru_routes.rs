@@ -11,8 +11,8 @@ use crate::{
         biodata_siswa::{biodata_siswa, biodata_siswa_table},
         ujian::{
             soal_create, soal_delete, soal_image_upload, soal_store, ujian_create, ujian_delete,
-            ujian_index, ujian_generate_token, ujian_show, ujian_store, ujian_table,
-            ujian_toggle_active, ujian_toggle_token,
+            ujian_index, ujian_generate_token, ujian_progress, ujian_progress_active_panel,
+            ujian_show, ujian_store, ujian_table, ujian_toggle_active, ujian_toggle_token,
         },
     },
     middlewares::role_middleware::{AllowedRoles, role_middleware},
@@ -30,6 +30,8 @@ pub fn guru_routes() -> Router {
         .route("/ujian", get(ujian_index))
         .route("/ujian/table", get(ujian_table))
         .route("/ujian/create", get(ujian_create))
+        .route("/progress-ujian", get(ujian_progress))
+        .route("/progress-ujian/active-panel", get(ujian_progress_active_panel))
         .route("/ujian/store", post(ujian_store))
         .route("/ujian/{id}", get(ujian_show))
         .route("/ujian/{id}", delete(ujian_delete))
