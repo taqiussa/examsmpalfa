@@ -1,0 +1,42 @@
+{% extends "layouts/app.html" %}
+
+{% block content %}
+<div class="card space-y-6">
+        <div class="flex items-center justify-between">
+                <div>
+                        <h1 class="text-xl font-semibold">Review Jawaban Uraian</h1>
+                        <p class="text-sm text-slate-500 mt-1">Nilai uraian default 0 sampai dikoreksi.</p>
+                </div>
+        </div>
+
+        <div id="uraian-loading" class="hidden text-sm text-slate-500">Memuat jawaban...</div>
+
+        <form id="uraian-filter" class="flex flex-wrap items-end gap-3"
+                method="get"
+                action="/ujian/uraian"
+                hx-get="/ujian/uraian/table"
+                hx-target="#uraian-table"
+                hx-swap="innerHTML"
+                hx-push-url="true"
+                hx-indicator="#uraian-loading"
+                hx-trigger="change from:select">
+                <div class="flex-1 min-w-[240px]">
+                        <label class="block text-sm text-slate-600 mb-1">Ujian (Mata Pelajaran)</label>
+                        <select name="ujian_id" class="input">
+                                <option value="">Pilih ujian...</option>
+                                {% for u in data.list_ujian %}
+                                <option value="{{ u.id }}" {% if u.id == data.selected_id %}selected{% endif %}>
+                                        {{ u.mata_pelajaran | default(value="-") }} - {{ u.title }}
+                                </option>
+                                {% endfor %}
+                        </select>
+                </div>
+        </form>
+
+        <div id="uraian-table"
+                hx-get="/ujian/uraian/table"
+                hx-trigger="load, refresh-uraian from:body"
+                hx-include="#uraian-filter"
+                hx-indicator="#uraian-loading"></div>
+</div>
+{% endblock %}

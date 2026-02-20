@@ -591,7 +591,7 @@ async fn finalize_submission(db: &MySqlPool, ujian_id: i64, nis: &str, peserta_i
                 END
             ),
             0
-        ) AS nilai_total
+        ) + COALESCE(SUM(COALESCE(j.nilai_uraian, 0)), 0) AS nilai_total
         FROM ujian_jawabans j
         JOIN soals s ON s.id = j.soal_id
         WHERE j.ujian_id = ? AND j.nis = ?
@@ -660,11 +660,13 @@ async fn simpan_jawaban_opsional(
         let _ = sqlx::query(
             r#"
             INSERT INTO ujian_jawabans
-                (ujian_id, nis, soal_id, pilihan, jawaban_uraian, is_benar, bobot_nilai, created_at, updated_at)
+                (ujian_id, nis, soal_id, pilihan, jawaban_uraian, nilai_uraian, status_uraian, is_benar, bobot_nilai, created_at, updated_at)
             VALUES
-                (?, ?, ?, NULL, ?, FALSE, 0, NOW(), NOW())
+                (?, ?, ?, NULL, ?, 0, NULL, FALSE, 0, NOW(), NOW())
             ON DUPLICATE KEY UPDATE
                 jawaban_uraian = VALUES(jawaban_uraian),
+                nilai_uraian = 0,
+                status_uraian = NULL,
                 pilihan = NULL,
                 is_benar = FALSE,
                 bobot_nilai = 0,
@@ -699,12 +701,14 @@ async fn simpan_jawaban_opsional(
     let _ = sqlx::query(
         r#"
         INSERT INTO ujian_jawabans
-            (ujian_id, nis, soal_id, pilihan, jawaban_uraian, is_benar, bobot_nilai, created_at, updated_at)
+            (ujian_id, nis, soal_id, pilihan, jawaban_uraian, nilai_uraian, status_uraian, is_benar, bobot_nilai, created_at, updated_at)
         VALUES
-            (?, ?, ?, ?, NULL, ?, ?, NOW(), NOW())
+            (?, ?, ?, ?, NULL, 0, NULL, ?, ?, NOW(), NOW())
         ON DUPLICATE KEY UPDATE
             pilihan = VALUES(pilihan),
             jawaban_uraian = NULL,
+            nilai_uraian = 0,
+            status_uraian = NULL,
             is_benar = VALUES(is_benar),
             bobot_nilai = VALUES(bobot_nilai),
             updated_at = NOW()

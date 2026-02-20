@@ -47,12 +47,39 @@ pub struct ProgressFilter {
     pub ujian_id: Option<i64>,
 }
 
+#[derive(Deserialize)]
+pub struct UraianFilter {
+    pub ujian_id: Option<i64>,
+}
+
 #[derive(Clone, Serialize, FromRow)]
 struct UjianOption {
     id: i64,
     title: String,
     mata_pelajaran: Option<String>,
     is_active: i8,
+}
+
+#[derive(Serialize, FromRow)]
+struct UraianJawabanRow {
+    jawaban_id: i64,
+    ujian_id: i64,
+    nis: String,
+    nama: Option<String>,
+    soal_id: i64,
+    pertanyaan: Option<String>,
+    jawaban_uraian: Option<String>,
+    nilai_uraian: i32,
+    status_uraian: Option<String>,
+    bobot_nilai: Option<i32>,
+}
+
+#[derive(Deserialize)]
+pub struct UraianScoreForm {
+    pub jawaban_id: i64,
+    pub ujian_id: i64,
+    pub nis: String,
+    pub nilai_uraian: i32,
 }
 
 #[derive(Serialize)]
@@ -431,7 +458,7 @@ pub async fn ujian_show(
                         END
                     ),
                     0
-                ) AS nilai_hitung
+                ) + COALESCE(SUM(COALESCE(j.nilai_uraian, 0)), 0) AS nilai_hitung
             FROM ujian_jawabans j
             JOIN soals s ON s.id = j.soal_id
             WHERE j.ujian_id = ?
@@ -594,7 +621,7 @@ pub async fn ujian_progress(
                             END
                         ),
                         0
-                    ) AS nilai_hitung
+                    ) + COALESCE(SUM(COALESCE(j.nilai_uraian, 0)), 0) AS nilai_hitung
                 FROM ujian_jawabans j
                 JOIN soals s ON s.id = j.soal_id
                 WHERE j.ujian_id = ?
@@ -701,6 +728,177 @@ pub async fn ujian_progress_active_panel(
         data,
     );
     Html(html.0).into_response()
+}
+
+#[derive(Serialize)]
+struct UraianReviewPageData {
+    list_ujian: Vec<UjianOption>,
+    selected_id: i64,
+}
+
+pub async fn ujian_uraian_review(
+    ctx: PageContext,
+    Query(filter): Query<UraianFilter>,
+    axum::Extension(db): axum::Extension<MySqlPool>,
+) -> Html<String> {
+    let list_ujian = fetch_ujian_options(&db).await;
+    let selected_id = filter.ujian_id.unwrap_or(0);
+
+    let data = UraianReviewPageData {
+        list_ujian,
+        selected_id,
+    };
+
+    render(&ctx, "guru/ujian/uraian_review.html", "Review Uraian", data)
+}
+
+pub async fn ujian_uraian_table(
+    ctx: PageContext,
+    Htmx(is_htmx): Htmx,
+    Query(filter): Query<UraianFilter>,
+    axum::Extension(db): axum::Extension<MySqlPool>,
+) -> axum::response::Response {
+    if !is_htmx {
+        let url = match filter.ujian_id {
+            Some(id) => format!("/ujian/uraian?ujian_id={}", id),
+            None => "/ujian/uraian".to_string(),
+        };
+        return Redirect::to(&url).into_response();
+    }
+
+    let mut list: Vec<UraianJawabanRow> = Vec::new();
+    if let Some(ujian_id) = filter.ujian_id {
+        list = sqlx::query_as::<_, UraianJawabanRow>(
+            r#"
+            SELECT
+                j.id as jawaban_id,
+                j.ujian_id,
+                j.nis,
+                u.name as nama,
+                j.soal_id,
+                s.pertanyaan,
+                j.jawaban_uraian,
+                COALESCE(j.nilai_uraian, 0) as nilai_uraian,
+                j.status_uraian,
+                COALESCE(s.bobot_nilai, 1) as bobot_nilai
+            FROM ujian_jawabans j
+            JOIN soals s ON s.id = j.soal_id
+            LEFT JOIN users u ON u.nis = j.nis
+            WHERE j.ujian_id = ?
+              AND s.kategori = 'Uraian'
+            ORDER BY
+                CASE WHEN j.status_uraian IS NULL THEN 0 ELSE 1 END,
+                j.updated_at DESC
+            "#,
+        )
+        .bind(ujian_id)
+        .fetch_all(&db)
+        .await
+        .unwrap_or_default();
+    }
+
+    let mut tera_ctx = Context::new();
+    tera_ctx.insert("list_jawaban", &list);
+    tera_ctx.insert("selected_id", &filter.ujian_id.unwrap_or(0));
+
+    let rendered = ctx
+        .tera
+        .render("guru/ujian/_uraian_table.html", &tera_ctx)
+        .unwrap();
+
+    Html(rendered).into_response()
+}
+
+pub async fn ujian_uraian_score(
+    Htmx(is_htmx): Htmx,
+    axum::Extension(db): axum::Extension<MySqlPool>,
+    Form(form): Form<UraianScoreForm>,
+) -> axum::response::Response {
+    if !is_htmx {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
+
+    let max_bobot: i32 = sqlx::query_scalar(
+        r#"
+        SELECT COALESCE(s.bobot_nilai, 1)
+        FROM ujian_jawabans j
+        JOIN soals s ON s.id = j.soal_id
+        WHERE j.id = ?
+        LIMIT 1
+        "#,
+    )
+    .bind(form.jawaban_id)
+    .fetch_one(&db)
+    .await
+    .unwrap_or(1);
+
+    let nilai = form.nilai_uraian.max(0).min(max_bobot);
+
+    let result = sqlx::query(
+        r#"
+        UPDATE ujian_jawabans
+        SET nilai_uraian = ?,
+            status_uraian = 'reviewed',
+            updated_at = NOW()
+        WHERE id = ?
+        "#,
+    )
+    .bind(nilai)
+    .bind(form.jawaban_id)
+    .execute(&db)
+    .await;
+
+    match result {
+        Ok(_) => {
+            let total_nilai: i64 = sqlx::query_scalar(
+                r#"
+                SELECT COALESCE(
+                    SUM(
+                        CASE
+                            WHEN j.pilihan = s.kunci_jawaban THEN COALESCE(s.bobot_nilai, 1)
+                            ELSE 0
+                        END
+                    ),
+                    0
+                ) + COALESCE(SUM(COALESCE(j.nilai_uraian, 0)), 0) AS nilai_total
+                FROM ujian_jawabans j
+                JOIN soals s ON s.id = j.soal_id
+                WHERE j.ujian_id = ? AND j.nis = ?
+                "#,
+            )
+            .bind(form.ujian_id)
+            .bind(&form.nis)
+            .fetch_one(&db)
+            .await
+            .unwrap_or(0);
+
+            let _ = sqlx::query(
+                r#"
+                UPDATE ujian_pesertas
+                SET total_nilai = ?,
+                    updated_at = NOW()
+                WHERE ujian_id = ? AND nis = ?
+                "#,
+            )
+            .bind(total_nilai as i32)
+            .bind(form.ujian_id)
+            .bind(&form.nis)
+            .execute(&db)
+            .await;
+
+            let mut headers = HeaderMap::new();
+            headers.insert(
+                "HX-Trigger-After-Settle",
+                "refresh-uraian,refresh-progress".parse().unwrap(),
+            );
+            (headers, Html(String::new())).into_response()
+        }
+        Err(e) => {
+            eprintln!("Error saving uraian score: {:?}", e);
+            let headers = flash_error("Gagal menyimpan nilai uraian.");
+            (headers, Html(String::new())).into_response()
+        }
+    }
 }
 
 pub async fn ujian_delete(

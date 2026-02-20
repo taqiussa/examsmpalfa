@@ -1,0 +1,75 @@
+{% if selected_id == 0 %}
+<div class="text-sm text-slate-500">Silakan pilih ujian terlebih dahulu.</div>
+{% else %}
+<div class="bg-white border border-slate-200 rounded-lg p-4">
+        <div class="overflow-auto">
+                <table class="w-full text-sm border border-slate-200 rounded">
+                        <thead class="bg-slate-100">
+                                <tr>
+                                        <th class="border px-2 py-1 text-left">Siswa</th>
+                                        <th class="border px-2 py-1 text-left">Soal</th>
+                                        <th class="border px-2 py-1 text-left">Jawaban</th>
+                                        <th class="border px-2 py-1 text-center">Nilai</th>
+                                        <th class="border px-2 py-1 text-center">Status</th>
+                                        <th class="border px-2 py-1 text-center">Aksi</th>
+                                </tr>
+                        </thead>
+                        <tbody>
+                                {% for j in list_jawaban %}
+                                <tr>
+                                        <td class="border px-2 py-1">
+                                                <div class="font-semibold">{{ j.nama | default(value="NIS " ~ j.nis) }}</div>
+                                                <div class="text-xs text-slate-500">{{ j.nis }}</div>
+                                        </td>
+                                        <td class="border px-2 py-1">
+                                                <div class="prose prose-sm max-w-none">{{ j.pertanyaan | safe }}</div>
+                                                <div class="text-xs text-slate-500 mt-1">Bobot: {{ j.bobot_nilai | default(value=1) }}</div>
+                                        </td>
+                                        <td class="border px-2 py-1">
+                                                <div class="prose prose-sm max-w-none">{{ j.jawaban_uraian | default(value="-") | safe }}</div>
+                                        </td>
+                                        <td class="border px-2 py-1 text-center">
+                                                <form class="flex items-center justify-center gap-2"
+                                                        hx-post="/ujian/uraian/score"
+                                                        hx-swap="none">
+                                                        <input type="hidden" name="jawaban_id" value="{{ j.jawaban_id }}">
+                                                        <input type="hidden" name="ujian_id" value="{{ j.ujian_id }}">
+                                                        <input type="hidden" name="nis" value="{{ j.nis }}">
+                                                        <input type="number" name="nilai_uraian" min="0" step="1"
+                                                                max="{{ j.bobot_nilai | default(value=1) }}"
+                                                                value="{{ j.nilai_uraian }}"
+                                                                class="input w-20 text-center" />
+                                                        <button type="submit" class="button bg-emerald-600 text-white hover:bg-emerald-700">
+                                                                Simpan
+                                                        </button>
+                                                </form>
+                                        </td>
+                                        <td class="border px-2 py-1 text-center">
+                                                {% if j.status_uraian %}
+                                                <span class="rounded bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">Dikoreksi</span>
+                                                {% else %}
+                                                <span class="rounded bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">Belum</span>
+                                                {% endif %}
+                                        </td>
+                                        <td class="border px-2 py-1 text-center">
+                                                <button type="button" class="text-slate-600 hover:text-slate-800"
+                                                        hx-get="/ujian/uraian/table"
+                                                        hx-include="#uraian-filter"
+                                                        hx-target="#uraian-table"
+                                                        hx-swap="innerHTML">
+                                                        Refresh
+                                                </button>
+                                        </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                        <td colspan="6" class="border px-2 py-3 text-center text-slate-500">
+                                                Belum ada jawaban uraian.
+                                        </td>
+                                </tr>
+                                {% endfor %}
+                        </tbody>
+                </table>
+        </div>
+</div>
+{% endif %}
