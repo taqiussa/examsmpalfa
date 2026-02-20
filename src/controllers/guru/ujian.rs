@@ -1,14 +1,17 @@
 use axum::{
-    extract::{Form, Path, Query},
+    extract::{Form, Multipart, Path, Query},
     http::{HeaderMap, StatusCode},
     response::{Html, IntoResponse, Redirect},
+    Json,
 };
+use aws_sdk_s3::primitives::ByteStream;
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, MySqlPool};
 use tera::Context;
 use uuid::Uuid;
 
+use crate::config::s3::S3State;
 use crate::utils::{page_context::PageContext, render::render, tahun::data_tahun};
 
 use super::absensi_kelas::Htmx;
@@ -144,7 +147,7 @@ pub struct CreateSoalForm {
     pub opsi_b: String,
     pub opsi_c: String,
     pub opsi_d: String,
-    pub kunci_jawaban: String,
+    pub kunci_jawaban: Option<String>,
     pub bobot_nilai: Option<i32>,
     pub kategori: Option<String>,
 }
@@ -181,6 +184,26 @@ fn flash_error(message: &str) -> HeaderMap {
 
 fn valid_jurusan(v: &str) -> bool {
     matches!(v, "UMUM" | "PBS" | "TKR" | "TKJ")
+}
+
+fn has_visible_content(html: &str) -> bool {
+    let mut in_tag = false;
+    for c in html.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ => {
+                if !in_tag && !c.is_whitespace() {
+                    return true;
+                }
+            }
+        }
+    }
+    html.contains("<img")
+}
+
+fn contains_data_image(html: &str) -> bool {
+    html.contains("data:image")
 }
 
 async fn fetch_mapel_options(db: &MySqlPool) -> Vec<MapelOption> {
@@ -703,7 +726,7 @@ pub async fn soal_create(
         opsi_d: String::new(),
         kunci_jawaban: "a".to_string(),
         bobot_nilai: 1,
-        kategori: String::new(),
+        kategori: "Pilihan Ganda".to_string(),
     };
 
     if is_htmx {
@@ -729,8 +752,79 @@ pub async fn soal_store(
     if form.pertanyaan.trim().is_empty() {
         let mut headers = flash_error("Pertanyaan tidak boleh kosong!");
         headers.insert("HX-Retarget", "#soal-form-container".parse().unwrap());
+        headers.insert("HX-Reswap", "none".parse().unwrap());
         return (headers, Html(String::new())).into_response();
     }
+
+    if contains_data_image(&form.pertanyaan)
+        || contains_data_image(&form.opsi_a)
+        || contains_data_image(&form.opsi_b)
+        || contains_data_image(&form.opsi_c)
+        || contains_data_image(&form.opsi_d)
+    {
+        let mut headers =
+            flash_error("Gambar base64 tidak diperbolehkan. Gunakan tombol upload gambar.");
+        headers.insert("HX-Retarget", "#soal-form-container".parse().unwrap());
+        headers.insert("HX-Reswap", "none".parse().unwrap());
+        return (headers, Html(String::new())).into_response();
+    }
+
+    let kategori = form
+        .kategori
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .unwrap_or("Pilihan Ganda");
+
+    if kategori != "Uraian" {
+        if !has_visible_content(&form.opsi_a)
+            || !has_visible_content(&form.opsi_b)
+            || !has_visible_content(&form.opsi_c)
+            || !has_visible_content(&form.opsi_d)
+        {
+            let mut headers =
+                flash_error("Opsi A, B, C, dan D wajib diisi (teks atau gambar).");
+            headers.insert("HX-Retarget", "#soal-form-container".parse().unwrap());
+            headers.insert("HX-Reswap", "none".parse().unwrap());
+            return (headers, Html(String::new())).into_response();
+        }
+
+        let Some(kunci) = form.kunci_jawaban.as_deref() else {
+            let mut headers = flash_error("Kunci jawaban wajib dipilih.");
+            headers.insert("HX-Retarget", "#soal-form-container".parse().unwrap());
+            headers.insert("HX-Reswap", "none".parse().unwrap());
+            return (headers, Html(String::new())).into_response();
+        };
+
+        if !matches!(kunci, "a" | "b" | "c" | "d") {
+            let mut headers = flash_error("Kunci jawaban tidak valid.");
+            headers.insert("HX-Retarget", "#soal-form-container".parse().unwrap());
+            headers.insert("HX-Reswap", "none".parse().unwrap());
+            return (headers, Html(String::new())).into_response();
+        }
+    }
+
+    let (kunci_jawaban, opsi_a, opsi_b, opsi_c, opsi_d) = if kategori == "Uraian" {
+        (None, String::new(), String::new(), String::new(), String::new())
+    } else {
+        (
+            form.kunci_jawaban.as_deref(),
+            form.opsi_a.clone(),
+            form.opsi_b.clone(),
+            form.opsi_c.clone(),
+            form.opsi_d.clone(),
+        )
+    };
+
+    let mut tx = match db.begin().await {
+        Ok(tx) => tx,
+        Err(_) => {
+            let mut headers = flash_error("Gagal memulai transaksi.");
+            headers.insert("HX-Retarget", "#soal-form-container".parse().unwrap());
+            headers.insert("HX-Reswap", "none".parse().unwrap());
+            return (headers, Html(String::new())).into_response();
+        }
+    };
 
     let result = sqlx::query(
         r#"
@@ -739,57 +833,190 @@ pub async fn soal_store(
         "#,
     )
     .bind(&form.pertanyaan)
-    .bind(&form.opsi_a)
-    .bind(&form.opsi_b)
-    .bind(&form.opsi_c)
-    .bind(&form.opsi_d)
-    .bind(&form.kunci_jawaban)
+    .bind(opsi_a)
+    .bind(opsi_b)
+    .bind(opsi_c)
+    .bind(opsi_d)
+    .bind(kunci_jawaban)
     .bind(form.bobot_nilai.unwrap_or(1))
-    .bind(&form.kategori)
-    .execute(&db)
+    .bind(kategori)
+    .execute(&mut *tx)
     .await;
 
-    match result {
-        Ok(result) => {
-            let soal_id = result.last_insert_id() as i64;
-
-            let max_urutan: Option<i64> = sqlx::query_scalar(
-                "SELECT MAX(urutan) FROM ujian_soals WHERE ujian_id = ?",
-            )
-            .bind(ujian_id)
-            .fetch_one(&db)
-            .await
-            .ok()
-            .flatten();
-
-            let urutan = max_urutan.unwrap_or(0) + 1;
-
-            let _ = sqlx::query(
-                "INSERT INTO ujian_soals (ujian_id, soal_id, urutan, created_at) VALUES (?, ?, ?, NOW())",
-            )
-            .bind(ujian_id)
-            .bind(soal_id)
-            .bind(urutan as i32)
-            .execute(&db)
-            .await;
-
-            let mut headers = flash_success("Soal berhasil ditambahkan!");
-            headers.insert(
-                "HX-Redirect",
-                format!("/ujian/{}", ujian_id).parse().unwrap(),
-            );
-            (headers, Html(String::new())).into_response()
-        }
+    let result = match result {
+        Ok(result) => result,
         Err(e) => {
             eprintln!("Error creating soal: {:?}", e);
+            let _ = tx.rollback().await;
             let mut headers = flash_error("Gagal menambahkan soal!");
-            headers.insert(
-                "HX-Redirect",
-                format!("/ujian/{}", ujian_id).parse().unwrap(),
-            );
-            (headers, Html(String::new())).into_response()
+            headers.insert("HX-Retarget", "#soal-form-container".parse().unwrap());
+            headers.insert("HX-Reswap", "none".parse().unwrap());
+            return (headers, Html(String::new())).into_response();
         }
+    };
+
+    let soal_id = result.last_insert_id() as i64;
+
+    let max_urutan: Option<i64> = sqlx::query_scalar(
+        "SELECT MAX(urutan) FROM ujian_soals WHERE ujian_id = ?",
+    )
+    .bind(ujian_id)
+    .fetch_one(&mut *tx)
+    .await
+    .ok()
+    .flatten();
+
+    let urutan = max_urutan.unwrap_or(0) + 1;
+
+    let link_result = sqlx::query(
+        "INSERT INTO ujian_soals (ujian_id, soal_id, urutan, created_at) VALUES (?, ?, ?, NOW())",
+    )
+    .bind(ujian_id)
+    .bind(soal_id)
+    .bind(urutan as i32)
+    .execute(&mut *tx)
+    .await;
+
+    if let Err(e) = link_result {
+        eprintln!("Error linking soal to ujian: {:?}", e);
+        let _ = tx.rollback().await;
+        let mut headers = flash_error("Gagal menyimpan relasi soal ke ujian.");
+        headers.insert("HX-Retarget", "#soal-form-container".parse().unwrap());
+        headers.insert("HX-Reswap", "none".parse().unwrap());
+        return (headers, Html(String::new())).into_response();
     }
+
+    if let Err(e) = tx.commit().await {
+        eprintln!("Error commit soal transaction: {:?}", e);
+        let mut headers = flash_error("Gagal menyimpan soal.");
+        headers.insert("HX-Retarget", "#soal-form-container".parse().unwrap());
+        headers.insert("HX-Reswap", "none".parse().unwrap());
+        return (headers, Html(String::new())).into_response();
+    }
+
+    let mut headers = flash_success("Soal berhasil ditambahkan!");
+    headers.insert(
+        "HX-Redirect",
+        format!("/ujian/{}", ujian_id).parse().unwrap(),
+    );
+    (headers, Html(String::new())).into_response()
+}
+
+#[derive(Serialize)]
+struct UploadResponse {
+    url: String,
+}
+
+pub async fn soal_image_upload(
+    Htmx(is_htmx): Htmx,
+    Path(ujian_id): Path<i64>,
+    axum::Extension(s3): axum::Extension<Option<S3State>>,
+    mut multipart: Multipart,
+) -> axum::response::Response {
+    if !is_htmx {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
+
+    let Some(s3) = s3 else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "S3 belum dikonfigurasi.",
+        )
+            .into_response();
+    };
+
+    let mut data: Option<(Vec<u8>, String)> = None;
+    let mut context: Option<String> = None;
+
+    while let Ok(Some(field)) = multipart.next_field().await {
+        if field.name() == Some("context") {
+            if let Ok(text) = field.text().await {
+                let cleaned = text.trim().to_lowercase();
+                if !cleaned.is_empty() {
+                    context = Some(cleaned);
+                }
+            }
+            continue;
+        }
+        if field.name() != Some("image") {
+            continue;
+        }
+        let content_type = field
+            .content_type()
+            .map(|v| v.to_string())
+            .unwrap_or_default();
+        let bytes = match field.bytes().await {
+            Ok(b) => b,
+            Err(_) => {
+                return (StatusCode::BAD_REQUEST, "Gagal membaca file.").into_response();
+            }
+        };
+        data = Some((bytes.to_vec(), content_type));
+        break;
+    }
+
+    let Some((bytes, content_type)) = data else {
+        return (StatusCode::BAD_REQUEST, "File image tidak ditemukan.").into_response();
+    };
+
+    const MAX_BYTES: usize = 5 * 1024 * 1024;
+    if bytes.len() > MAX_BYTES {
+        return (
+            StatusCode::PAYLOAD_TOO_LARGE,
+            "Ukuran gambar maksimal 5MB.",
+        )
+            .into_response();
+    }
+
+    let ext = match content_type.as_str() {
+        "image/png" => "png",
+        "image/jpeg" => "jpg",
+        "image/jpg" => "jpg",
+        "image/webp" => "webp",
+        "image/gif" => "gif",
+        _ => {
+            return (
+                StatusCode::UNSUPPORTED_MEDIA_TYPE,
+                "Format gambar tidak didukung.",
+            )
+                .into_response();
+        }
+    };
+
+    let folder = context
+        .as_deref()
+        .unwrap_or("misc")
+        .replace(|c: char| !c.is_ascii_alphanumeric(), "_");
+    let key = format!(
+        "smkmifda/ujian/{}/{}/{}.{}",
+        ujian_id,
+        folder,
+        Uuid::new_v4(),
+        ext
+    );
+    let body = ByteStream::from(bytes);
+
+    let result = s3
+        .client
+        .put_object()
+        .bucket(&s3.bucket)
+        .key(&key)
+        .acl(aws_sdk_s3::types::ObjectCannedAcl::PublicRead)
+        .content_type(content_type)
+        .body(body)
+        .send()
+        .await;
+
+    if let Err(_) = result {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Gagal upload ke storage.",
+        )
+            .into_response();
+    }
+
+    let url = format!("{}/{}", s3.public_base_url.trim_end_matches('/'), key);
+    Json(UploadResponse { url }).into_response()
 }
 
 pub async fn soal_delete(

@@ -13,12 +13,7 @@
     </div>
 
     {% if data.current %}
-    <form
-      id="jawaban-form"
-      hx-post="/siswa/ujian/{{ data.peserta_id }}/jawab"
-      hx-swap="none"
-      class="space-y-6"
-    >
+    <form id="jawaban-form" hx-post="/siswa/ujian/{{ data.peserta_id }}/jawab" hx-swap="none" class="space-y-6">
       <input type="hidden" name="soal_id" value="{{ data.current.soal_id }}">
       <input type="hidden" id="nomor_saat_ini" name="nomor_saat_ini" value="{{ data.nomor_saat_ini }}">
       <input type="hidden" id="nomor_tujuan" name="nomor_tujuan" value="{{ data.nomor_saat_ini }}">
@@ -27,44 +22,54 @@
         <div class="prose prose-sm max-w-none">{{ data.current.pertanyaan | safe }}</div>
       </div>
 
+      {% if data.current.kategori != "Uraian" %}
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <label class="rounded-md border border-slate-200 p-3 hover:bg-slate-50 cursor-pointer">
-          <input type="radio" name="pilihan" value="a" {% if data.current.jawaban_terpilih == "a" %}checked{% endif %}>
+          <input type="radio" name="pilihan" value="a" {% if data.current.jawaban_terpilih=="a" %}checked{% endif %}>
           <span class="ml-2 font-semibold">A.</span>
           <span>{{ data.current.opsi_a | safe }}</span>
         </label>
         <label class="rounded-md border border-slate-200 p-3 hover:bg-slate-50 cursor-pointer">
-          <input type="radio" name="pilihan" value="b" {% if data.current.jawaban_terpilih == "b" %}checked{% endif %}>
+          <input type="radio" name="pilihan" value="b" {% if data.current.jawaban_terpilih=="b" %}checked{% endif %}>
           <span class="ml-2 font-semibold">B.</span>
           <span>{{ data.current.opsi_b | safe }}</span>
         </label>
         <label class="rounded-md border border-slate-200 p-3 hover:bg-slate-50 cursor-pointer">
-          <input type="radio" name="pilihan" value="c" {% if data.current.jawaban_terpilih == "c" %}checked{% endif %}>
+          <input type="radio" name="pilihan" value="c" {% if data.current.jawaban_terpilih=="c" %}checked{% endif %}>
           <span class="ml-2 font-semibold">C.</span>
           <span>{{ data.current.opsi_c | safe }}</span>
         </label>
         <label class="rounded-md border border-slate-200 p-3 hover:bg-slate-50 cursor-pointer">
-          <input type="radio" name="pilihan" value="d" {% if data.current.jawaban_terpilih == "d" %}checked{% endif %}>
+          <input type="radio" name="pilihan" value="d" {% if data.current.jawaban_terpilih=="d" %}checked{% endif %}>
           <span class="ml-2 font-semibold">D.</span>
           <span>{{ data.current.opsi_d | safe }}</span>
         </label>
       </div>
+      {% else %}
+      <div class="rounded-md border border-slate-200 bg-white p-3">
+        <label class="block text-sm font-medium text-slate-700 mb-2">Jawaban Uraian</label>
+        <textarea name="jawaban_uraian" rows="5" class="input w-full"
+          placeholder="Tulis jawaban uraian di sini...">{{ data.current.jawaban_uraian | default(value="") }}</textarea>
+      </div>
+      {% endif %}
 
       <div class="flex items-center gap-2 pt-2">
         {% if data.nomor_saat_ini > 1 %}
-        <button type="button" class="button bg-slate-600 hover:bg-slate-700" onclick="goToNomor({{ data.nomor_saat_ini - 1 }})">
+        <button type="button" class="button bg-slate-600 hover:bg-slate-700"
+          onclick="goToNomor({{ data.nomor_saat_ini - 1 }})">
           Simpan & Sebelumnya
         </button>
         {% endif %}
-        {% if data.nomor_saat_ini < data.total_soal %}
-        <button type="button" class="button" onclick="goToNomor({{ data.nomor_saat_ini + 1 }})">
+        {% if data.nomor_saat_ini < data.total_soal %} <button type="button" class="button"
+          onclick="goToNomor({{ data.nomor_saat_ini + 1 }})">
           Simpan & Berikutnya
-        </button>
-        {% else %}
-        <button type="button" class="button bg-sky-600 hover:bg-sky-700" onclick="goToNomor({{ data.nomor_saat_ini }})">
-          Simpan Jawaban
-        </button>
-        {% endif %}
+          </button>
+          {% else %}
+          <button type="button" class="button bg-sky-600 hover:bg-sky-700"
+            onclick="goToNomor({{ data.nomor_saat_ini }})">
+            Simpan Jawaban
+          </button>
+          {% endif %}
       </div>
     </form>
     {% endif %}
@@ -74,11 +79,9 @@
     <h2 class="text-base font-semibold text-slate-700">Navigasi Nomor</h2>
     <div class="grid grid-cols-5 gap-2">
       {% for n in data.nav %}
-      <button
-        type="button"
+      <button type="button"
         class="rounded-md border px-2 py-1 text-sm font-semibold {% if n.aktif %}bg-emerald-600 text-white border-emerald-600{% elif n.terjawab %}bg-sky-50 text-sky-700 border-sky-200{% else %}bg-white text-slate-700 border-slate-200{% endif %}"
-        onclick="goToNomor({{ n.nomor }})"
-      >
+        onclick="goToNomor({{ n.nomor }})">
         {{ n.nomor }}
       </button>
       {% endfor %}
@@ -88,18 +91,17 @@
       <input type="hidden" name="konfirmasi" value="1">
       <input type="hidden" name="soal_id" value="{{ data.current.soal_id }}">
       <input type="hidden" name="pilihan" id="submit-pilihan" value="">
-      <button
-        type="submit"
+      <input type="hidden" name="jawaban_uraian" id="submit-uraian" value="">
+      <button type="submit"
         class="w-full rounded-md bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700"
         data-confirm="Yakin submit ujian sekarang? Setelah submit jawaban tidak bisa diubah."
-        data-confirm-text="Submit"
-      >
+        data-confirm-text="Submit">
         Submit Ujian
       </button>
     </form>
 
     <div class="text-xs text-slate-500">
-      Nilai akhir tidak ditampilkan ke siswa. Hasil masuk ke dashboard guru/admin.
+      Hasil Ujian Terekam Real Time.
     </div>
   </div>
 </div>
@@ -122,34 +124,39 @@
     submitForm.addEventListener('submit', function () {
       const checked = jawabanForm.querySelector('input[name="pilihan"]:checked');
       pilihanInput.value = checked ? checked.value : '';
+      const uraianInput = jawabanForm.querySelector('textarea[name="jawaban_uraian"]');
+      const submitUraian = document.getElementById('submit-uraian');
+      if (submitUraian) {
+        submitUraian.value = uraianInput ? uraianInput.value : '';
+      }
     });
 
     const deadline = Number({{ data.timer_deadline_ms }});
-    const countdown = document.getElementById('countdown');
-    let autoSubmitted = false;
+  const countdown = document.getElementById('countdown');
+  let autoSubmitted = false;
 
-    function formatMs(ms) {
-      const total = Math.max(0, Math.floor(ms / 1000));
-      const m = Math.floor(total / 60).toString().padStart(2, '0');
-      const s = (total % 60).toString().padStart(2, '0');
-      return `${m}:${s}`;
+  function formatMs(ms) {
+    const total = Math.max(0, Math.floor(ms / 1000));
+    const m = Math.floor(total / 60).toString().padStart(2, '0');
+    const s = (total % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  }
+
+  function tick() {
+    const remain = deadline - Date.now();
+    if (countdown) {
+      countdown.textContent = `Sisa waktu: ${formatMs(remain)}`;
     }
-
-    function tick() {
-      const remain = deadline - Date.now();
-      if (countdown) {
-        countdown.textContent = `Sisa waktu: ${formatMs(remain)}`;
-      }
-      if (remain <= 0 && !autoSubmitted) {
-        autoSubmitted = true;
-        const checked = jawabanForm.querySelector('input[name=\"pilihan\"]:checked');
-        pilihanInput.value = checked ? checked.value : '';
-        submitForm.requestSubmit();
-      }
+    if (remain <= 0 && !autoSubmitted) {
+      autoSubmitted = true;
+      const checked = jawabanForm.querySelector('input[name=\"pilihan\"]:checked');
+      pilihanInput.value = checked ? checked.value : '';
+      submitForm.requestSubmit();
     }
+  }
 
-    tick();
-    setInterval(tick, 1000);
+  tick();
+  setInterval(tick, 1000);
   });
 </script>
 {% endblock %}

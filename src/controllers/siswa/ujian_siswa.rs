@@ -242,11 +242,13 @@ struct UjianSessionData {
 struct SoalView {
     soal_id: i64,
     pertanyaan: String,
+    kategori: Option<String>,
     opsi_a: String,
     opsi_b: String,
     opsi_c: String,
     opsi_d: String,
     jawaban_terpilih: Option<String>,
+    jawaban_uraian: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -271,6 +273,7 @@ struct SoalSessionRow {
     soal_id: i64,
     urutan: i32,
     pertanyaan: String,
+    kategori: Option<String>,
     opsi_a: Option<String>,
     opsi_b: Option<String>,
     opsi_c: Option<String>,
@@ -280,7 +283,8 @@ struct SoalSessionRow {
 #[derive(FromRow)]
 struct JawabanRow {
     soal_id: i64,
-    pilihan: String,
+    pilihan: Option<String>,
+    jawaban_uraian: Option<String>,
 }
 
 pub async fn ujian_session_page(
@@ -340,6 +344,7 @@ pub async fn ujian_session_page(
             s.id as soal_id,
             us.urutan,
             s.pertanyaan,
+            s.kategori,
             s.opsi_a,
             s.opsi_b,
             s.opsi_c,
@@ -360,7 +365,7 @@ pub async fn ujian_session_page(
     }
 
     let jawaban = sqlx::query_as::<_, JawabanRow>(
-        "SELECT soal_id, pilihan FROM ujian_jawabans WHERE ujian_id = ? AND nis = ?",
+        "SELECT soal_id, pilihan, jawaban_uraian FROM ujian_jawabans WHERE ujian_id = ? AND nis = ?",
     )
     .bind(header.ujian_id)
     .bind(&nis)
@@ -368,7 +373,8 @@ pub async fn ujian_session_page(
     .await
     .unwrap_or_default();
 
-    let jawaban_map: HashMap<i64, String> = jawaban.into_iter().map(|j| (j.soal_id, j.pilihan)).collect();
+    let jawaban_map: HashMap<i64, JawabanRow> =
+        jawaban.into_iter().map(|j| (j.soal_id, j)).collect();
     let total_soal = soals.len() as i32;
     let nomor_req = query.nomor.unwrap_or(header.last_nomor);
     let nomor_saat_ini = nomor_req.clamp(1, total_soal);
@@ -387,11 +393,17 @@ pub async fn ujian_session_page(
     let current = current_soal.map(|s| SoalView {
         soal_id: s.soal_id,
         pertanyaan: s.pertanyaan.clone(),
+        kategori: s.kategori.clone(),
         opsi_a: s.opsi_a.clone().unwrap_or_default(),
         opsi_b: s.opsi_b.clone().unwrap_or_default(),
         opsi_c: s.opsi_c.clone().unwrap_or_default(),
         opsi_d: s.opsi_d.clone().unwrap_or_default(),
-        jawaban_terpilih: jawaban_map.get(&s.soal_id).cloned(),
+        jawaban_terpilih: jawaban_map
+            .get(&s.soal_id)
+            .and_then(|j| j.pilihan.clone()),
+        jawaban_uraian: jawaban_map
+            .get(&s.soal_id)
+            .and_then(|j| j.jawaban_uraian.clone()),
     });
 
     let nav = soals
@@ -399,7 +411,19 @@ pub async fn ujian_session_page(
         .map(|s| SoalNav {
             nomor: s.urutan,
             aktif: s.urutan == nomor_saat_ini,
-            terjawab: jawaban_map.contains_key(&s.soal_id),
+            terjawab: jawaban_map
+                .get(&s.soal_id)
+                .map(|j| {
+                    if s.kategori.as_deref() == Some("Uraian") {
+                        j.jawaban_uraian
+                            .as_deref()
+                            .map(|v| !v.trim().is_empty())
+                            .unwrap_or(false)
+                    } else {
+                        j.pilihan.is_some()
+                    }
+                })
+                .unwrap_or(false),
         })
         .collect::<Vec<_>>();
 
@@ -422,14 +446,16 @@ pub async fn ujian_session_page(
 pub struct JawabForm {
     soal_id: i64,
     pilihan: Option<String>,
+    jawaban_uraian: Option<String>,
     nomor_tujuan: Option<i32>,
     nomor_saat_ini: i32,
 }
 
 #[derive(FromRow)]
 struct SoalKunciRow {
-    kunci_jawaban: String,
+    kunci_jawaban: Option<String>,
     bobot_nilai: i32,
+    kategori: Option<String>,
 }
 
 pub async fn ujian_simpan_jawaban(
@@ -462,7 +488,15 @@ pub async fn ujian_simpan_jawaban(
         .into_response();
     }
 
-    simpan_jawaban_opsional(&db, peserta.ujian_id, &nis, form.soal_id, form.pilihan.clone()).await;
+    simpan_jawaban_opsional(
+        &db,
+        peserta.ujian_id,
+        &nis,
+        form.soal_id,
+        form.pilihan.clone(),
+        form.jawaban_uraian.clone(),
+    )
+    .await;
 
     let nomor_tujuan = form.nomor_tujuan.unwrap_or(form.nomor_saat_ini).max(1);
     let _ = sqlx::query("UPDATE ujian_pesertas SET last_nomor = ?, updated_at = NOW() WHERE id = ?")
@@ -493,6 +527,7 @@ pub struct SubmitForm {
     _konfirmasi: Option<String>,
     soal_id: Option<i64>,
     pilihan: Option<String>,
+    jawaban_uraian: Option<String>,
 }
 
 pub async fn ujian_submit(
@@ -526,7 +561,15 @@ pub async fn ujian_submit(
     }
 
     if let Some(soal_id) = form.soal_id {
-        simpan_jawaban_opsional(&db, peserta.ujian_id, &nis, soal_id, form.pilihan.clone()).await;
+        simpan_jawaban_opsional(
+            &db,
+            peserta.ujian_id,
+            &nis,
+            soal_id,
+            form.pilihan.clone(),
+            form.jawaban_uraian.clone(),
+        )
+        .await;
     }
 
     let _ = finalize_submission(&db, peserta.ujian_id, &nis, peserta_id).await;
@@ -584,19 +627,11 @@ async fn simpan_jawaban_opsional(
     nis: &str,
     soal_id: i64,
     pilihan: Option<String>,
+    jawaban_uraian: Option<String>,
 ) {
-    let Some(pilihan_raw) = pilihan else {
-        return;
-    };
-
-    let pilihan = pilihan_raw.to_lowercase();
-    if !matches!(pilihan.as_str(), "a" | "b" | "c" | "d") {
-        return;
-    }
-
     let kunci = sqlx::query_as::<_, SoalKunciRow>(
         r#"
-        SELECT s.kunci_jawaban, COALESCE(s.bobot_nilai, 1) as bobot_nilai
+        SELECT s.kunci_jawaban, COALESCE(s.bobot_nilai, 1) as bobot_nilai, s.kategori
         FROM ujian_soals us
         JOIN soals s ON s.id = us.soal_id
         WHERE us.ujian_id = ? AND us.soal_id = ?
@@ -613,17 +648,63 @@ async fn simpan_jawaban_opsional(
         return;
     };
 
-    let is_benar = k.kunci_jawaban.eq_ignore_ascii_case(&pilihan);
+    let is_uraian = k.kategori.as_deref() == Some("Uraian");
+    if is_uraian {
+        let Some(text) = jawaban_uraian.as_deref() else {
+            return;
+        };
+        if text.trim().is_empty() {
+            return;
+        }
+
+        let _ = sqlx::query(
+            r#"
+            INSERT INTO ujian_jawabans
+                (ujian_id, nis, soal_id, pilihan, jawaban_uraian, is_benar, bobot_nilai, created_at, updated_at)
+            VALUES
+                (?, ?, ?, NULL, ?, FALSE, 0, NOW(), NOW())
+            ON DUPLICATE KEY UPDATE
+                jawaban_uraian = VALUES(jawaban_uraian),
+                pilihan = NULL,
+                is_benar = FALSE,
+                bobot_nilai = 0,
+                updated_at = NOW()
+            "#,
+        )
+        .bind(ujian_id)
+        .bind(nis)
+        .bind(soal_id)
+        .bind(text)
+        .execute(db)
+        .await;
+        return;
+    }
+
+    let Some(pilihan_raw) = pilihan else {
+        return;
+    };
+
+    let pilihan = pilihan_raw.to_lowercase();
+    if !matches!(pilihan.as_str(), "a" | "b" | "c" | "d") {
+        return;
+    }
+
+    let is_benar = k
+        .kunci_jawaban
+        .as_deref()
+        .map(|v| v.eq_ignore_ascii_case(&pilihan))
+        .unwrap_or(false);
     let nilai = if is_benar { k.bobot_nilai } else { 0 };
 
     let _ = sqlx::query(
         r#"
         INSERT INTO ujian_jawabans
-            (ujian_id, nis, soal_id, pilihan, is_benar, bobot_nilai, created_at, updated_at)
+            (ujian_id, nis, soal_id, pilihan, jawaban_uraian, is_benar, bobot_nilai, created_at, updated_at)
         VALUES
-            (?, ?, ?, ?, ?, ?, NOW(), NOW())
+            (?, ?, ?, ?, NULL, ?, ?, NOW(), NOW())
         ON DUPLICATE KEY UPDATE
             pilihan = VALUES(pilihan),
+            jawaban_uraian = NULL,
             is_benar = VALUES(is_benar),
             bobot_nilai = VALUES(bobot_nilai),
             updated_at = NOW()

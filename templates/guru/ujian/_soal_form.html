@@ -1,4 +1,4 @@
-<div id="soal-form-container" class="card space-y-6 max-w-4xl mx-auto">
+<div id="soal-form-container" class="card">
 
         <div class="flex items-center gap-4">
                 <a href="/ujian/{{ data.ujian_id }}" class="text-slate-500 hover:text-slate-700">
@@ -7,80 +7,96 @@
                 <h1 class="card-header">Tambah Soal untuk: {{ data.ujian_title }}</h1>
         </div>
 
-        <form id="soal-form" method="post" hx-post="/ujian/{{ data.ujian_id }}/soal/store" class="space-y-6">
+        <form id="soal-form" method="post" hx-post="/ujian/{{ data.ujian_id }}/soal/store" hx-swap="none">
 
                 <!-- Pertanyaan with Quill Editor -->
-                <div>
+                <div class="space-y-2 mb-5">
                         <label class="block text-sm font-medium text-slate-700 mb-1">
                                 Pertanyaan <span class="text-rose-500">*</span>
                         </label>
                         <input type="hidden" name="pertanyaan" id="pertanyaan-input" value="{{ data.pertanyaan }}">
-                        <div id="quill-editor" class="bg-white" style="height: 200px;"></div>
-                </div>
-
-                <!-- Options -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                                <label class="block text-sm font-medium text-slate-700 mb-1">
-                                        Opsi A <span class="text-emerald-500">✓</span>
-                                </label>
-                                <input type="text" name="opsi_a" value="{{ data.opsi_a }}" placeholder="Jawaban opsi A"
-                                        class="input w-full" required>
-                        </div>
-
-                        <div>
-                                <label class="block text-sm font-medium text-slate-700 mb-1">
-                                        Opsi B
-                                </label>
-                                <input type="text" name="opsi_b" value="{{ data.opsi_b }}" placeholder="Jawaban opsi B"
-                                        class="input w-full" required>
-                        </div>
-
-                        <div>
-                                <label class="block text-sm font-medium text-slate-700 mb-1">
-                                        Opsi C
-                                </label>
-                                <input type="text" name="opsi_c" value="{{ data.opsi_c }}" placeholder="Jawaban opsi C"
-                                        class="input w-full">
-                        </div>
-
-                        <div>
-                                <label class="block text-sm font-medium text-slate-700 mb-1">
-                                        Opsi D
-                                </label>
-                                <input type="text" name="opsi_d" value="{{ data.opsi_d }}" placeholder="Jawaban opsi D"
-                                        class="input w-full">
-                        </div>
+                        <div id="quill-editor" class="bg-white" style="height: 180px;"></div>
                 </div>
 
                 <!-- Jawaban Benar & Metadata -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                                <label class="block text-sm font-medium text-slate-700 mb-1">
-                                        Kunci Jawaban <span class="text-rose-500">*</span>
-                                </label>
-                                <select name="kunci_jawaban" class="input w-full" required>
-                                        <option value="a" {% if data.kunci_jawaban=='a' %}selected{% endif %}>A</option>
-                                        <option value="b" {% if data.kunci_jawaban=='b' %}selected{% endif %}>B</option>
-                                        <option value="c" {% if data.kunci_jawaban=='c' %}selected{% endif %}>C</option>
-                                        <option value="d" {% if data.kunci_jawaban=='d' %}selected{% endif %}>D</option>
-                                </select>
+                <div class="rounded-lg border border-slate-200 bg-slate-50 p-5 space-y-5 mb-5">
+                        <div class="text-sm font-semibold text-slate-700">Kunci Jawaban & Kategori</div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-1">
+                                                Kategori
+                                        </label>
+                                        <select id="kategori-select" name="kategori" class="input w-full">
+                                                <option value="Pilihan Ganda" {% if data.kategori=="Pilihan Ganda"
+                                                        %}selected{% endif %}>Pilihan Ganda</option>
+                                                <option value="Uraian" {% if data.kategori=="Uraian" %}selected{% endif
+                                                        %}>Uraian</option>
+                                        </select>
+                                </div>
+
+                                <div id="kunci-section">
+                                        <label class="block text-sm font-medium text-slate-700 mb-1">
+                                                Kunci Jawaban <span class="text-rose-500">*</span>
+                                        </label>
+                                        <select name="kunci_jawaban" class="input w-full" required>
+                                                <option value="a" {% if data.kunci_jawaban=='a' %}selected{% endif %}>A
+                                                </option>
+                                                <option value="b" {% if data.kunci_jawaban=='b' %}selected{% endif %}>B
+                                                </option>
+                                                <option value="c" {% if data.kunci_jawaban=='c' %}selected{% endif %}>C
+                                                </option>
+                                                <option value="d" {% if data.kunci_jawaban=='d' %}selected{% endif %}>D
+                                                </option>
+                                        </select>
+                                </div>
+
+                                <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-1">
+                                                Bobot Nilai
+                                        </label>
+                                        <input type="number" name="bobot_nilai" value="{{ data.bobot_nilai }}" min="1"
+                                                max="100" value="1" class="input w-full">
+                                </div>
+
+                        </div>
+                </div>
+
+                <!-- Options (Rich text + image) -->
+                <div id="opsi-section" class="mb-10 md:mb-20">
+                        <div class="md:grid md:grid-cols-2 md:space-y-0 space-y-5 gap-5 mb-3 py-3 md:mb-20">
+                                <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-1">
+                                                Opsi A <span class="text-emerald-500">✓</span>
+                                        </label>
+                                        <input type="hidden" name="opsi_a" id="opsi-a-input" value="{{ data.opsi_a }}">
+                                        <div id="opsi-a-editor" class="bg-white opsi-editor"></div>
+                                </div>
+
+                                <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-1">
+                                                Opsi B
+                                        </label>
+                                        <input type="hidden" name="opsi_b" id="opsi-b-input" value="{{ data.opsi_b }}">
+                                        <div id="opsi-b-editor" class="bg-white opsi-editor"></div>
+                                </div>
                         </div>
 
-                        <div>
-                                <label class="block text-sm font-medium text-slate-700 mb-1">
-                                        Bobot Nilai
-                                </label>
-                                <input type="number" name="bobot_nilai" value="{{ data.bobot_nilai }}" min="1" max="100"
-                                        value="1" class="input w-full">
-                        </div>
+                        <div class="md:grid md:grid-cols-2 md:space-y-0 space-y-5 gap-5 mb-3 py-3">
+                                <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-1">
+                                                Opsi C
+                                        </label>
+                                        <input type="hidden" name="opsi_c" id="opsi-c-input" value="{{ data.opsi_c }}">
+                                        <div id="opsi-c-editor" class="bg-white opsi-editor"></div>
+                                </div>
 
-                        <div>
-                                <label class="block text-sm font-medium text-slate-700 mb-1">
-                                        Kategori
-                                </label>
-                                <input type="text" name="kategori" value="{{ data.kategori }}"
-                                        placeholder="Contoh: Pilihan Ganda" class="input w-full">
+                                <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-1">
+                                                Opsi D
+                                        </label>
+                                        <input type="hidden" name="opsi_d" id="opsi-d-input" value="{{ data.opsi_d }}">
+                                        <div id="opsi-d-editor" class="bg-white opsi-editor"></div>
+                                </div>
                         </div>
                 </div>
 
@@ -105,39 +121,138 @@
 
 <script>
         document.addEventListener('DOMContentLoaded', function () {
-                // Initialize Quill Editor
-                var quill = new Quill('#quill-editor', {
-                        theme: 'snow',
-                        placeholder: 'Ketik pertanyaan di sini...',
-                        modules: {
-                                toolbar: [
-                                        [{ 'header': [1, 2, 3, false] }],
-                                        ['bold', 'italic', 'underline', 'strike'],
-                                        [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-                                        ['link', 'image'],
-                                        ['clean']
-                                ]
-                        }
-                });
+                var uploadUrl = "/ujian/{{ data.ujian_id }}/upload-image";
+                var kategoriSelect = document.getElementById('kategori-select');
+                var opsiSection = document.getElementById('opsi-section');
+                var kunciSection = document.getElementById('kunci-section');
 
-                // Get the hidden input
-                var pertanyaanInput = document.getElementById('pertanyaan-input');
+                function handleImageUpload(quill, context) {
+                        var input = document.createElement('input');
+                        input.setAttribute('type', 'file');
+                        input.setAttribute('accept', 'image/*');
+                        input.click();
 
-                // Set initial content if exists
-                if (pertanyaanInput && pertanyaanInput.value) {
-                        quill.root.innerHTML = pertanyaanInput.value;
+                        input.onchange = async function () {
+                                if (!input.files || !input.files[0]) {
+                                        return;
+                                }
+
+                                var formData = new FormData();
+                                if (context) {
+                                        formData.append('context', context);
+                                }
+                                formData.append('image', input.files[0]);
+
+                                try {
+                                        var res = await fetch(uploadUrl, {
+                                                method: 'POST',
+                                                body: formData,
+                                                headers: {
+                                                        'HX-Request': 'true'
+                                                }
+                                        });
+
+                                        if (!res.ok) {
+                                                alert('Gagal upload gambar. Periksa ukuran/format.');
+                                                return;
+                                        }
+
+                                        var data = await res.json();
+                                        var range = quill.getSelection(true);
+                                        quill.insertEmbed(range.index, 'image', data.url);
+                                        quill.setSelection(range.index + 1);
+                                } catch (err) {
+                                        console.error(err);
+                                        alert('Gagal upload gambar.');
+                                }
+                        };
                 }
 
-                // Update hidden input on form submit
-                var form = document.getElementById('soal-form');
-                form.addEventListener('submit', function () {
-                        pertanyaanInput.value = quill.root.innerHTML;
-                });
+                function buildQuill(selector, placeholder, context) {
+                        return new Quill(selector, {
+                                theme: 'snow',
+                                placeholder: placeholder,
+                                modules: {
+                                        toolbar: {
+                                                container: [
+                                                        [{ 'header': [1, 2, 3, false] }],
+                                                        ['bold', 'italic', 'underline', 'strike'],
+                                                        [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+                                                        ['link', 'image'],
+                                                        ['clean']
+                                                ],
+                                                handlers: {
+                                                        image: function () {
+                                                                handleImageUpload(this.quill, context);
+                                                        }
+                                                }
+                                        }
+                                }
+                        });
+                }
 
-                // Also update on HTMX request
-                form.addEventListener('htmx:beforeRequest', function () {
-                        pertanyaanInput.value = quill.root.innerHTML;
-                });
+                var quillPertanyaan = buildQuill('#quill-editor', 'Ketik pertanyaan di sini...', 'pertanyaan');
+                var quillA = buildQuill('#opsi-a-editor', 'Jawaban opsi A', 'opsi_a');
+                var quillB = buildQuill('#opsi-b-editor', 'Jawaban opsi B', 'opsi_b');
+                var quillC = buildQuill('#opsi-c-editor', 'Jawaban opsi C', 'opsi_c');
+                var quillD = buildQuill('#opsi-d-editor', 'Jawaban opsi D', 'opsi_d');
+
+                var pertanyaanInput = document.getElementById('pertanyaan-input');
+                var opsiAInput = document.getElementById('opsi-a-input');
+                var opsiBInput = document.getElementById('opsi-b-input');
+                var opsiCInput = document.getElementById('opsi-c-input');
+                var opsiDInput = document.getElementById('opsi-d-input');
+
+                function setInitial(quill, input) {
+                        if (input && input.value) {
+                                quill.root.innerHTML = input.value;
+                        }
+                }
+
+                setInitial(quillPertanyaan, pertanyaanInput);
+                setInitial(quillA, opsiAInput);
+                setInitial(quillB, opsiBInput);
+                setInitial(quillC, opsiCInput);
+                setInitial(quillD, opsiDInput);
+
+                var form = document.getElementById('soal-form');
+                function syncInputs() {
+                        pertanyaanInput.value = quillPertanyaan.root.innerHTML;
+                        opsiAInput.value = quillA.root.innerHTML;
+                        opsiBInput.value = quillB.root.innerHTML;
+                        opsiCInput.value = quillC.root.innerHTML;
+                        opsiDInput.value = quillD.root.innerHTML;
+                }
+
+                function toggleKategori() {
+                        if (!kategoriSelect || !opsiSection || !kunciSection) {
+                                return;
+                        }
+                        var kunciSelect = kunciSection.querySelector('select');
+                        if (kategoriSelect.value === 'Uraian') {
+                                opsiSection.classList.add('hidden');
+                                kunciSection.classList.add('hidden');
+                                if (kunciSelect) {
+                                        kunciSelect.disabled = true;
+                                        kunciSelect.required = false;
+                                }
+                        } else {
+                                opsiSection.classList.remove('hidden');
+                                kunciSection.classList.remove('hidden');
+                                if (kunciSelect) {
+                                        kunciSelect.disabled = false;
+                                        kunciSelect.required = true;
+                                }
+                        }
+                }
+
+                form.addEventListener('submit', syncInputs);
+                form.addEventListener('htmx:beforeRequest', syncInputs);
+
+                if (kategoriSelect) {
+                        kategoriSelect.addEventListener('change', toggleKategori);
+                        toggleKategori();
+                }
         });
 </script>
 
@@ -157,7 +272,11 @@
         }
 
         .ql-editor {
-                min-height: 150px;
+                min-height: 140px;
+        }
+
+        .opsi-editor .ql-editor {
+                min-height: 80px;
         }
 
         .ql-editor.ql-blank::before {

@@ -1,7 +1,7 @@
 {% extends "layouts/app.html" %}
 
 {% block content %}
-<div class="card space-y-6  mx-auto">
+<div class="card space-y-6">
 
         <div class="flex items-center gap-4">
                 <a href="/ujian" class="text-slate-500 hover:text-slate-700">
@@ -35,7 +35,8 @@
                                 Jurusan Akses <span class="text-rose-500">*</span>
                         </label>
                         <select name="jurusan" class="input w-full" required>
-                                <option value="UMUM" {% if data.jurusan=="UMUM" %}selected{% endif %}>UMUM (semua jurusan)</option>
+                                <option value="UMUM" {% if data.jurusan=="UMUM" %}selected{% endif %}>UMUM (semua
+                                        jurusan)</option>
                                 <option value="PBS" {% if data.jurusan=="PBS" %}selected{% endif %}>PBS</option>
                                 <option value="TKR" {% if data.jurusan=="TKR" %}selected{% endif %}>TKR</option>
                                 <option value="TKJ" {% if data.jurusan=="TKJ" %}selected{% endif %}>TKJ</option>

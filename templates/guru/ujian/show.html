@@ -204,32 +204,34 @@
                                         <div class="prose prose-sm max-w-none mb-4">
                                                 {{ s.pertanyaan | safe }}
                                         </div>
+                                        {% if s.kategori != "Uraian" %}
                                         <div class="grid grid-cols-2 gap-2 text-sm">
                                                 <div class="flex items-center gap-2">
                                                         <span
-                                                                class="w-6 h-6 rounded bg-slate-100 flex items-center justify-center text-xs font-medium {% if s.kunci_jawaban == 'a' %}bg-emerald-500 text-white{% endif %}">A</span>
+                                                                class="w-6 h-6 rounded flex items-center justify-center text-xs font-medium {% if s.kunci_jawaban == 'a' %} bg-emerald-400 text-white {% else %} bg-slate-200 {% endif %}">A</span>
                                                         <span>{{ s.opsi_a | safe }}</span>
                                                 </div>
                                                 <div class="flex items-center gap-2">
                                                         <span
-                                                                class="w-6 h-6 rounded bg-slate-100 flex items-center justify-center text-xs font-medium {% if s.kunci_jawaban == 'b' %}bg-emerald-500 text-white{% endif %}">B</span>
+                                                                class="w-6 h-6 rounded flex items-center justify-center text-xs font-medium {% if s.kunci_jawaban == 'b' %} bg-emerald-400 text-white {% else %} bg-slate-200 {% endif %}">B</span>
                                                         <span>{{ s.opsi_b | safe }}</span>
                                                 </div>
                                                 {% if s.opsi_c %}
                                                 <div class="flex items-center gap-2">
                                                         <span
-                                                                class="w-6 h-6 rounded bg-slate-100 flex items-center justify-center text-xs font-medium {% if s.kunci_jawaban == 'c' %}bg-emerald-500 text-white{% endif %}">C</span>
+                                                                class="w-6 h-6 rounded flex items-center justify-center text-xs font-medium {% if s.kunci_jawaban == 'c' %} bg-emerald-400 text-white {% else %} bg-slate-200 {% endif %}">C</span>
                                                         <span>{{ s.opsi_c | safe }}</span>
                                                 </div>
                                                 {% endif %}
                                                 {% if s.opsi_d %}
                                                 <div class="flex items-center gap-2">
                                                         <span
-                                                                class="w-6 h-6 rounded bg-slate-100 flex items-center justify-center text-xs font-medium {% if s.kunci_jawaban == 'd' %}bg-emerald-500 text-white{% endif %}">D</span>
+                                                                class="w-6 h-6 rounded flex items-center justify-center text-xs font-medium {% if s.kunci_jawaban == 'd' %} bg-emerald-400 text-white {% else %} bg-slate-200 {% endif %}">D</span>
                                                         <span>{{ s.opsi_d | safe }}</span>
                                                 </div>
                                                 {% endif %}
                                         </div>
+                                        {% endif %}
                                 </div>
                                 <button type="button" class="text-rose-600 hover:text-rose-800 p-2"
                                         hx-delete="/ujian/{{ data.ujian.id }}/soal/{{ s.id }}" hx-target="closest div"

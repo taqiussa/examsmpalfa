@@ -157,7 +157,8 @@ docker compose --env-file .env.prod up -d --build
 Build image **tidak butuh koneksi DB** jika `.sqlx/` sudah ada dan `SQLX_OFFLINE=true` dipakai.  
 Jalankan ini di lokal/CI setiap kali query SQL berubah:
 ```bash
-DATABASE_URL="mysql://user:pass@host:3306/db" cargo sqlx prepare -- --bin examsmkmifda
+DATABASE_URL="mysql://user:pass@host:3306/db" 
+cargo sqlx prepare -- --bin examsmkmifda
 ```
 
 ### 3. Henti Services

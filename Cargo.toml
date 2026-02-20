@@ -4,7 +4,7 @@ version = "1.0.0"
 edition = "2024"
 
 [dependencies]
-axum = "0.8.8"
+axum = { version = "0.8.8", features = ["multipart"] }
 askama = { version = "0.12", features = ["with-axum"] }
 askama_axum = "0.4"
 axum-extra = { version = "0.10", features = ["cookie"] }
@@ -26,6 +26,9 @@ validator = { version = "0.20.0", features = ["derive"] }
 time = "0.3"
 tera = "1.20.1"
 uuid = { version = "1.18.1", features = ["v4"] }
+aws-config = "1.8.3"
+aws-sdk-s3 = "1.91.0"
+aws-types = "1.3.8"
 
 [dev-dependencies]
 serial_test = "3.2.0"

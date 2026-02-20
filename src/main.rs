@@ -44,11 +44,13 @@ async fn main() {
     // =========================
     // Router
     // =========================
+    let s3_state = config::s3::build_from_env().await;
     let app = Router::new()
         .nest_service("/static", ServeDir::new("static"))
         .merge(routes::web_routes::web_routes())
         .layer(Extension(db))
-        .layer(Extension(tera));
+        .layer(Extension(tera))
+        .layer(Extension(s3_state));
 
     // =========================
     // Port

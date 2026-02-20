@@ -10,9 +10,9 @@ use crate::{
         },
         biodata_siswa::{biodata_siswa, biodata_siswa_table},
         ujian::{
-            soal_create, soal_delete, soal_store, ujian_create, ujian_delete, ujian_index,
-            ujian_generate_token, ujian_show, ujian_store, ujian_table, ujian_toggle_active,
-            ujian_toggle_token,
+            soal_create, soal_delete, soal_image_upload, soal_store, ujian_create, ujian_delete,
+            ujian_index, ujian_generate_token, ujian_show, ujian_store, ujian_table,
+            ujian_toggle_active, ujian_toggle_token,
         },
     },
     middlewares::role_middleware::{AllowedRoles, role_middleware},
@@ -38,6 +38,7 @@ pub fn guru_routes() -> Router {
         .route("/ujian/{id}/token/{token_id}/toggle", post(ujian_toggle_token))
         .route("/ujian/{id}/soal/create", get(soal_create))
         .route("/ujian/{id}/soal/store", post(soal_store))
+        .route("/ujian/{id}/upload-image", post(soal_image_upload))
         .route("/ujian/{id}/soal/{soal_id}", delete(soal_delete))
         .route_layer(middleware::from_fn(role_middleware))
         .layer(Extension(AllowedRoles(vec![

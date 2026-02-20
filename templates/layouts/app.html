@@ -44,11 +44,20 @@
       </header>
 
       <!-- CONTENT -->
-      <main class="flex-1 overflow-y-auto min-h-0 p-4">
+      <main class="flex-1 overflow-y-auto min-h-0 p-4 mb-10">
 
         {% block content %}{% endblock %}
 
       </main>
+      <footer
+        class="fixed bottom-0 w-full px-2 py-1 border-t text-slate-600 bg-white/30 backdrop-blur border-emerald-300">
+        &copy; SMK Miftahul Huda 2025 - <span id="year"></span> | Elemenka Project
+      </footer>
+
+      <script>
+        document.getElementById("year").textContent =
+          new Date().getFullYear();
+      </script>
 
     </div>
 
