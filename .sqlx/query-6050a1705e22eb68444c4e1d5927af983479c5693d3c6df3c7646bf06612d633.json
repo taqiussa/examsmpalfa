@@ -26,7 +26,7 @@
         "name": "nis",
         "type_info": {
           "type": "VarString",
-          "flags": "UNIQUE_KEY",
+          "flags": "UNIQUE_KEY | MULTIPLE_KEY",
           "max_size": 80
         }
       }

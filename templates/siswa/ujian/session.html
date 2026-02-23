@@ -60,17 +60,19 @@
           Simpan & Sebelumnya
         </button>
         {% endif %}
-        {% if data.nomor_saat_ini < data.total_soal %} <button type="button" class="button"
-          onclick="goToNomor({{ data.nomor_saat_ini + 1 }})">
+        {% if data.nomor_saat_ini < data.total_soal %}
+        <button type="button" class="button" onclick="goToNomor({{ data.nomor_saat_ini + 1 }})">
           Simpan & Berikutnya
-          </button>
-          {% else %}
-          <button type="button" class="button bg-sky-600 hover:bg-sky-700"
-            onclick="goToNomor({{ data.nomor_saat_ini }})">
-            Simpan Jawaban
-          </button>
-          {% endif %}
+        </button>
+        {% else %}
+        <button type="submit" form="submit-ujian-form" class="button bg-rose-600 hover:bg-rose-700"
+          data-confirm="Yakin submit ujian sekarang? Setelah submit jawaban tidak bisa diubah."
+          data-confirm-text="Submit">
+          Simpan & Submit
+        </button>
+        {% endif %}
       </div>
+
     </form>
     {% endif %}
   </div>
@@ -87,24 +89,18 @@
       {% endfor %}
     </div>
 
-    <form id="submit-ujian-form" method="post" action="/siswa/ujian/{{ data.peserta_id }}/submit" class="pt-4 border-t">
-      <input type="hidden" name="konfirmasi" value="1">
-      <input type="hidden" name="soal_id" value="{{ data.current.soal_id }}">
-      <input type="hidden" name="pilihan" id="submit-pilihan" value="">
-      <input type="hidden" name="jawaban_uraian" id="submit-uraian" value="">
-      <button type="submit"
-        class="w-full rounded-md bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700"
-        data-confirm="Yakin submit ujian sekarang? Setelah submit jawaban tidak bisa diubah."
-        data-confirm-text="Submit">
-        Submit Ujian
-      </button>
-    </form>
-
     <div class="text-xs text-slate-500">
       Hasil Ujian Terekam Real Time.
     </div>
   </div>
 </div>
+
+<form id="submit-ujian-form" method="post" action="/siswa/ujian/{{ data.peserta_id }}/submit" class="hidden">
+  <input type="hidden" name="konfirmasi" value="1">
+  <input type="hidden" name="soal_id" value="{{ data.current.soal_id }}">
+  <input type="hidden" name="pilihan" id="submit-pilihan" value="">
+  <input type="hidden" name="jawaban_uraian" id="submit-uraian" value="">
+</form>
 
 <script>
   function goToNomor(nomor) {

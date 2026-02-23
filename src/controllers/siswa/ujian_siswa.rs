@@ -584,17 +584,12 @@ pub async fn ujian_submit(
 }
 
 async fn finalize_submission(db: &MySqlPool, ujian_id: i64, nis: &str, peserta_id: i64) -> i64 {
-    let total_nilai: i64 = sqlx::query_scalar(
+    let (total_benar, total_salah, total_pg): (i64, i64, i64) = sqlx::query_as(
         r#"
-        SELECT COALESCE(
-            SUM(
-                CASE
-                    WHEN j.pilihan = s.kunci_jawaban THEN COALESCE(s.bobot_nilai, 1)
-                    ELSE 0
-                END
-            ),
-            0
-        ) + COALESCE(SUM(COALESCE(j.nilai_uraian, 0)), 0) AS nilai_total
+        SELECT
+            COALESCE(SUM(CASE WHEN s.kategori = 'Pilihan Ganda' AND j.is_benar = 1 THEN 1 ELSE 0 END), 0) as total_benar,
+            COALESCE(SUM(CASE WHEN s.kategori = 'Pilihan Ganda' AND j.is_benar = 0 THEN 1 ELSE 0 END), 0) as total_salah,
+            COALESCE(SUM(CASE WHEN s.kategori = 'Pilihan Ganda' THEN COALESCE(j.bobot_nilai, 0) ELSE 0 END), 0) as total_pg
         FROM ujian_jawabans j
         JOIN soals s ON s.id = j.soal_id
         WHERE j.ujian_id = ? AND j.nis = ?
@@ -604,7 +599,26 @@ async fn finalize_submission(db: &MySqlPool, ujian_id: i64, nis: &str, peserta_i
     .bind(nis)
     .fetch_one(db)
     .await
-    .unwrap_or(0);
+    .unwrap_or((0, 0, 0));
+
+    let ujian_meta: Option<(i64, Option<String>)> = sqlx::query_as(
+        r#"
+        SELECT CAST(mata_pelajaran_id AS SIGNED) as mata_pelajaran_id, tahun
+        FROM ujians
+        WHERE id = ?
+        LIMIT 1
+        "#,
+    )
+    .bind(ujian_id)
+    .fetch_optional(db)
+    .await
+    .unwrap_or_else(|e| {
+        eprintln!(
+            "hasil_nilais meta query failed: ujian_id={}, peserta_id={}, nis={}, err={:?}",
+            ujian_id, peserta_id, nis, e
+        );
+        None
+    });
 
     let _ = sqlx::query(
         r#"
@@ -616,12 +630,66 @@ async fn finalize_submission(db: &MySqlPool, ujian_id: i64, nis: &str, peserta_i
         WHERE id = ?
         "#,
     )
-    .bind(total_nilai as i32)
+    .bind(total_pg as i32)
     .bind(peserta_id)
     .execute(db)
     .await;
 
-    total_nilai
+    if let Some((mata_pelajaran_id, Some(tahun))) = ujian_meta {
+        let insert_res = sqlx::query(
+            r#"
+            INSERT INTO hasil_nilais
+                (nis, ujian_id, mata_pelajaran_id, tahun, total_benar, total_salah, total_pg, total_uraian, total_nilai, created_at, updated_at)
+            VALUES
+                (?, ?, ?, ?, ?, ?, ?, NULL, ?, NOW(), NOW())
+            ON DUPLICATE KEY UPDATE
+                total_benar = VALUES(total_benar),
+                total_salah = VALUES(total_salah),
+                total_pg = VALUES(total_pg),
+                total_nilai = VALUES(total_nilai),
+                updated_at = NOW()
+            "#,
+        )
+        .bind(nis)
+        .bind(ujian_id)
+        .bind(mata_pelajaran_id)
+        .bind(&tahun)
+        .bind(total_benar as i32)
+        .bind(total_salah as i32)
+        .bind(total_pg as i32)
+        .bind(total_pg as i32)
+        .execute(db)
+        .await;
+        if let Err(e) = insert_res {
+            eprintln!(
+                "hasil_nilais insert failed: ujian_id={}, nis={}, mata_pelajaran_id={}, tahun={}, err={:?}",
+                ujian_id, nis, mata_pelajaran_id, tahun, e
+            );
+        }
+    } else {
+        let ujian_exists: Option<(i64, Option<String>, Option<String>)> = sqlx::query_as(
+            r#"
+            SELECT id, CAST(mata_pelajaran_id AS CHAR) as mata_pelajaran_id, tahun
+            FROM ujians
+            WHERE id = ?
+            LIMIT 1
+            "#,
+        )
+        .bind(ujian_id)
+        .fetch_optional(db)
+        .await
+        .unwrap_or(None);
+        eprintln!(
+            "hasil_nilais meta missing detail: ujian_id={}, peserta_id={}, nis={}, ujian_row={:?}",
+            ujian_id, peserta_id, nis, ujian_exists
+        );
+        eprintln!(
+            "hasil_nilais insert skipped: ujian meta missing for ujian_id={}, peserta_id={}, nis={}",
+            ujian_id, peserta_id, nis
+        );
+    }
+
+    total_pg
 }
 
 async fn simpan_jawaban_opsional(
