@@ -218,23 +218,18 @@ pub async fn ujian_uraian_score(
                     debug_bobot
                 );
 
-                // Fix: Cast DECIMAL to DOUBLE to avoid type mismatch in sqlx
+                // Compute total_benar as sum of earned bobot_nilai for this specific ujian and nis
+                // (match finalize_submission behavior which sums bobot_nilai per ujian_id)
                 let total_benar_result: Result<f64, _> = sqlx::query_scalar(
                     r#"
                     SELECT COALESCE(SUM(CAST(COALESCE(j.bobot_nilai,0) AS DOUBLE)), 0)
                     FROM ujian_jawabans j
-                    JOIN soals s ON s.id = j.soal_id
-                    JOIN ujians u ON u.id = j.ujian_id
                     WHERE j.nis = ?
-                      AND u.mata_pelajaran_id = ?
-                      AND u.tahun = ?
-                      AND s.kategori IN ('Pilihan Ganda','Pilihan Ganda Kompleks','Benar/Salah')
-                      AND j.is_benar = 1
+                      AND j.ujian_id = ?
                     "#,
                 )
                 .bind(&form.nis)
-                .bind(mata_pelajaran_id)
-                .bind(&tahun)
+                .bind(form.ujian_id)
                 .fetch_one(&db)
                 .await;
 
@@ -250,21 +245,19 @@ pub async fn ujian_uraian_score(
                 };
                 eprintln!("DEBUG ujian_uraian_score: total_benar={}", total_benar);
 
+                // total_possible_non_uraian should be computed for this specific ujian (sum of non-uraian bobot)
                 let total_possible_result: Result<f64, _> = sqlx::query_scalar(
-                    r#"
-                    SELECT COALESCE(SUM(CAST(COALESCE(s.bobot_nilai,0) AS DOUBLE)), 0)
-                    FROM ujian_soals us
-                    JOIN soals s ON s.id = us.soal_id
-                    JOIN ujians u ON u.id = us.ujian_id
-                    WHERE u.mata_pelajaran_id = ?
-                      AND u.tahun = ?
-                      AND s.kategori <> 'Uraian'
-                    "#,
-                )
-                .bind(mata_pelajaran_id)
-                .bind(&tahun)
-                .fetch_one(&db)
-                .await;
+                                        r#"
+                                        SELECT COALESCE(SUM(CAST(COALESCE(s.bobot_nilai,0) AS DOUBLE)), 0)
+                                        FROM ujian_soals us
+                                        JOIN soals s ON s.id = us.soal_id
+                                        WHERE us.ujian_id = ?
+                                            AND s.kategori <> 'Uraian'
+                                        "#,
+                                )
+                                .bind(form.ujian_id)
+                                .fetch_one(&db)
+                                .await;
 
                 let total_possible_non_uraian = match total_possible_result {
                     Ok(val) => val,
@@ -286,24 +279,20 @@ pub async fn ujian_uraian_score(
                     total_salah = 0.0
                 }
 
-                // Fix: Cast DECIMAL to DOUBLE to avoid type mismatch in sqlx
+                // Sum reviewed uraian scores for this specific ujian and nis
                 let total_uraian_result: Result<f64, _> = sqlx::query_scalar(
-                    r#"
-                    SELECT COALESCE(SUM(CAST(COALESCE(j.nilai_uraian,0) AS DOUBLE)), 0)
-                    FROM ujian_jawabans j
-                    JOIN soals s ON s.id = j.soal_id
-                    JOIN ujians u ON u.id = j.ujian_id
-                    WHERE j.nis = ?
-                      AND u.mata_pelajaran_id = ?
-                      AND u.tahun = ?
-                      AND s.kategori = 'Uraian'
-                    "#,
-                )
-                .bind(&form.nis)
-                .bind(mata_pelajaran_id)
-                .bind(&tahun)
-                .fetch_one(&db)
-                .await;
+                                        r#"
+                                        SELECT COALESCE(SUM(CAST(COALESCE(j.nilai_uraian,0) AS DOUBLE)), 0)
+                                        FROM ujian_jawabans j
+                                        WHERE j.nis = ?
+                                            AND j.ujian_id = ?
+                                            AND j.id IS NOT NULL
+                                        "#,
+                                )
+                                .bind(&form.nis)
+                                .bind(form.ujian_id)
+                                .fetch_one(&db)
+                                .await;
 
                 let total_uraian = match total_uraian_result {
                     Ok(val) => val,
