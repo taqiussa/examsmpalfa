@@ -1,8 +1,8 @@
 use axum::{
+    Form,
     extract::Query,
     http::{HeaderMap, StatusCode},
     response::{Html, IntoResponse, Redirect},
-    Form,
 };
 use serde::Serialize;
 use sqlx::MySqlPool;
@@ -11,7 +11,7 @@ use tera::Context;
 use crate::utils::{page_context::PageContext, render::render, tahun::data_tahun};
 
 use super::{
-    fetch_ujian_options, flash_error, UraianFilter, UraianJawabanRow, UraianScoreForm, UjianOption,
+    UjianOption, UraianFilter, UraianJawabanRow, UraianScoreForm, fetch_ujian_options, flash_error,
 };
 
 use crate::controllers::guru::absensi_kelas::Htmx;
@@ -65,7 +65,7 @@ pub async fn ujian_uraian_table(
     let mut list: Vec<UraianJawabanRow> = Vec::new();
     if let Some(ujian_id) = filter.ujian_id {
         let tahun = filter.tahun.clone().unwrap_or_else(data_tahun);
-        list = sqlx::query_as::<_, UraianJawabanRow>(
+        let query = sqlx::query_as::<_, UraianJawabanRow>(
             r#"
             SELECT
                 j.id as jawaban_id,
@@ -75,9 +75,9 @@ pub async fn ujian_uraian_table(
                 j.soal_id,
                 s.pertanyaan,
                 j.jawaban_uraian,
-                COALESCE(j.nilai_uraian, 0) as nilai_uraian,
+                COALESCE(CAST(j.nilai_uraian AS SIGNED), 0) as nilai_uraian,
                 j.status_uraian,
-                COALESCE(s.bobot_nilai, 1) as bobot_nilai
+                COALESCE(CAST(s.bobot_nilai AS DOUBLE), 1) as bobot_nilai
             FROM ujian_jawabans j
             JOIN soals s ON s.id = j.soal_id
             JOIN ujians uj ON uj.id = j.ujian_id
@@ -91,10 +91,18 @@ pub async fn ujian_uraian_table(
             "#,
         )
         .bind(ujian_id)
-        .bind(&tahun)
-        .fetch_all(&db)
-        .await
-        .unwrap_or_default();
+        .bind(&tahun);
+
+        match query.fetch_all(&db).await {
+            Ok(rows) => list = rows,
+            Err(e) => {
+                eprintln!(
+                    "ERROR ujian_uraian_table: query failed ujian_id={}, tahun={}, err={:?}",
+                    ujian_id, tahun, e
+                );
+                list = Vec::new();
+            }
+        }
     }
 
     let mut tera_ctx = Context::new();
@@ -118,9 +126,15 @@ pub async fn ujian_uraian_score(
         return StatusCode::BAD_REQUEST.into_response();
     }
 
-    let max_bobot: i32 = sqlx::query_scalar(
+    eprintln!(
+        "DEBUG ujian_uraian_score: START - jawaban_id={}, ujian_id={}, nis={}, nilai={}",
+        form.jawaban_id, form.ujian_id, form.nis, form.nilai_uraian
+    );
+
+    // Fix: Cast DECIMAL to DOUBLE to avoid type mismatch in sqlx
+    let max_bobot: Result<i32, _> = sqlx::query_scalar(
         r#"
-        SELECT COALESCE(s.bobot_nilai, 1)
+        SELECT COALESCE(CAST(s.bobot_nilai AS SIGNED), 1)
         FROM ujian_jawabans j
         JOIN soals s ON s.id = j.soal_id
         WHERE j.id = ?
@@ -129,10 +143,19 @@ pub async fn ujian_uraian_score(
     )
     .bind(form.jawaban_id)
     .fetch_one(&db)
-    .await
-    .unwrap_or(1);
+    .await;
+
+    let max_bobot = match max_bobot {
+        Ok(val) => val,
+        Err(e) => {
+            eprintln!("DEBUG ujian_uraian_score: max_bobot query FAILED: {:?}", e);
+            1
+        }
+    };
+    eprintln!("DEBUG ujian_uraian_score: max_bobot={}", max_bobot);
 
     let nilai = form.nilai_uraian.max(0).min(max_bobot);
+    eprintln!("DEBUG ujian_uraian_score: final nilai={}", nilai);
 
     let result = sqlx::query(
         r#"
@@ -150,32 +173,156 @@ pub async fn ujian_uraian_score(
 
     match result {
         Ok(_) => {
-            let summary: Option<(i64, Option<String>, i64, i64, i64, i64)> = sqlx::query_as(
+            eprintln!(
+                "DEBUG ujian_uraian_score: UPDATE successful for jawaban_id={}",
+                form.jawaban_id
+            );
+
+            // Compute decimal totals: total_benar based on bobot_nilai, total_possible_non_uraian, total_uraian
+            let summary: Option<(i64, Option<String>)> = sqlx::query_as(
                 r#"
-                SELECT
-                    CAST(u.mata_pelajaran_id AS SIGNED) as mata_pelajaran_id,
-                    u.tahun,
-                    COALESCE(SUM(CASE WHEN s.kategori = 'Pilihan Ganda' AND j.is_benar = 1 THEN 1 ELSE 0 END), 0) as total_benar,
-                    COALESCE(SUM(CASE WHEN s.kategori = 'Pilihan Ganda' AND j.is_benar = 0 THEN 1 ELSE 0 END), 0) as total_salah,
-                    COALESCE(SUM(CASE WHEN s.kategori = 'Pilihan Ganda' THEN COALESCE(j.bobot_nilai, 0) ELSE 0 END), 0) as total_pg,
-                    COALESCE(SUM(CASE WHEN s.kategori = 'Uraian' THEN COALESCE(j.nilai_uraian, 0) ELSE 0 END), 0) as total_uraian
-                FROM ujian_jawabans j
-                JOIN soals s ON s.id = j.soal_id
-                JOIN ujians u ON u.id = j.ujian_id
-                WHERE j.ujian_id = ? AND j.nis = ?
-                GROUP BY u.mata_pelajaran_id, u.tahun
-                LIMIT 1
-                "#,
+                    SELECT
+                        CAST(u.mata_pelajaran_id AS SIGNED) as mata_pelajaran_id,
+                        u.tahun
+                    FROM ujians u
+                    WHERE u.id = ?
+                    LIMIT 1
+                    "#,
             )
             .bind(form.ujian_id)
-            .bind(&form.nis)
             .fetch_optional(&db)
             .await
             .unwrap_or(None);
 
-            let mut total_pg_value: i64 = 0;
-            let mut total_uraian_value: i64 = 0;
-            if let Some((mata_pelajaran_id, Some(tahun), total_benar, total_salah, total_pg, total_uraian)) = summary {
+            eprintln!("DEBUG ujian_uraian_score: summary={:?}", summary);
+
+            let mut total_pg_value: f64 = 0.0;
+            let mut total_uraian_value: f64 = 0.0;
+            if let Some((mata_pelajaran_id, Some(tahun))) = summary {
+                eprintln!(
+                    "DEBUG ujian_uraian_score: computing totals for mata_pelajaran_id={}, tahun={}",
+                    mata_pelajaran_id, tahun
+                );
+
+                // Debug: Check what bobot_nilai values exist
+                let debug_bobot: Vec<(i64, f64)> = sqlx::query_as(
+                    "SELECT j.id, CAST(j.bobot_nilai AS DOUBLE) FROM ujian_jawabans j WHERE j.nis = ? AND j.ujian_id = ?"
+                )
+                .bind(&form.nis)
+                .bind(form.ujian_id)
+                .fetch_all(&db)
+                .await
+                .unwrap_or_default();
+                eprintln!(
+                    "DEBUG ujian_uraian_score: debug_bobot values = {:?}",
+                    debug_bobot
+                );
+
+                // Fix: Cast DECIMAL to DOUBLE to avoid type mismatch in sqlx
+                let total_benar_result: Result<f64, _> = sqlx::query_scalar(
+                    r#"
+                    SELECT COALESCE(SUM(CAST(COALESCE(j.bobot_nilai,0) AS DOUBLE)), 0)
+                    FROM ujian_jawabans j
+                    JOIN soals s ON s.id = j.soal_id
+                    JOIN ujians u ON u.id = j.ujian_id
+                    WHERE j.nis = ?
+                      AND u.mata_pelajaran_id = ?
+                      AND u.tahun = ?
+                      AND s.kategori IN ('Pilihan Ganda','Pilihan Ganda Kompleks','Benar/Salah')
+                      AND j.is_benar = 1
+                    "#,
+                )
+                .bind(&form.nis)
+                .bind(mata_pelajaran_id)
+                .bind(&tahun)
+                .fetch_one(&db)
+                .await;
+
+                let total_benar = match total_benar_result {
+                    Ok(val) => val,
+                    Err(e) => {
+                        eprintln!(
+                            "DEBUG ujian_uraian_score: total_benar query FAILED: {:?}",
+                            e
+                        );
+                        0.0
+                    }
+                };
+                eprintln!("DEBUG ujian_uraian_score: total_benar={}", total_benar);
+
+                let total_possible_result: Result<f64, _> = sqlx::query_scalar(
+                    r#"
+                    SELECT COALESCE(SUM(CAST(COALESCE(s.bobot_nilai,0) AS DOUBLE)), 0)
+                    FROM ujian_soals us
+                    JOIN soals s ON s.id = us.soal_id
+                    JOIN ujians u ON u.id = us.ujian_id
+                    WHERE u.mata_pelajaran_id = ?
+                      AND u.tahun = ?
+                      AND s.kategori <> 'Uraian'
+                    "#,
+                )
+                .bind(mata_pelajaran_id)
+                .bind(&tahun)
+                .fetch_one(&db)
+                .await;
+
+                let total_possible_non_uraian = match total_possible_result {
+                    Ok(val) => val,
+                    Err(e) => {
+                        eprintln!(
+                            "DEBUG ujian_uraian_score: total_possible query FAILED: {:?}",
+                            e
+                        );
+                        0.0
+                    }
+                };
+                eprintln!(
+                    "DEBUG ujian_uraian_score: total_possible_non_uraian={}",
+                    total_possible_non_uraian
+                );
+
+                let mut total_salah = total_possible_non_uraian - total_benar;
+                if total_salah < 0.0 {
+                    total_salah = 0.0
+                }
+
+                // Fix: Cast DECIMAL to DOUBLE to avoid type mismatch in sqlx
+                let total_uraian_result: Result<f64, _> = sqlx::query_scalar(
+                    r#"
+                    SELECT COALESCE(SUM(CAST(COALESCE(j.nilai_uraian,0) AS DOUBLE)), 0)
+                    FROM ujian_jawabans j
+                    JOIN soals s ON s.id = j.soal_id
+                    JOIN ujians u ON u.id = j.ujian_id
+                    WHERE j.nis = ?
+                      AND u.mata_pelajaran_id = ?
+                      AND u.tahun = ?
+                      AND s.kategori = 'Uraian'
+                    "#,
+                )
+                .bind(&form.nis)
+                .bind(mata_pelajaran_id)
+                .bind(&tahun)
+                .fetch_one(&db)
+                .await;
+
+                let total_uraian = match total_uraian_result {
+                    Ok(val) => val,
+                    Err(e) => {
+                        eprintln!(
+                            "DEBUG ujian_uraian_score: total_uraian query FAILED: {:?}",
+                            e
+                        );
+                        0.0
+                    }
+                };
+                eprintln!("DEBUG ujian_uraian_score: total_uraian={}", total_uraian);
+                eprintln!(
+                    "DEBUG ujian_uraian_score: total_nilai will be = total_benar + total_uraian = {} + {} = {}",
+                    total_benar,
+                    total_uraian,
+                    total_benar + total_uraian
+                );
+
                 let _ = sqlx::query(
                     r#"
                     INSERT INTO hasil_nilais
@@ -195,14 +342,15 @@ pub async fn ujian_uraian_score(
                 .bind(form.ujian_id)
                 .bind(mata_pelajaran_id)
                 .bind(&tahun)
-                .bind(total_benar as i32)
-                .bind(total_salah as i32)
-                .bind(total_pg as i32)
-                .bind(total_uraian as i32)
-                .bind((total_pg + total_uraian) as i32)
+                .bind(total_benar)
+                .bind(total_salah)
+                .bind(total_benar)
+                .bind(total_uraian)
+                .bind(total_benar + total_uraian)
                 .execute(&db)
                 .await;
-                total_pg_value = total_pg;
+
+                total_pg_value = total_benar;
                 total_uraian_value = total_uraian;
             }
 
@@ -214,7 +362,7 @@ pub async fn ujian_uraian_score(
                 WHERE ujian_id = ? AND nis = ?
                 "#,
             )
-            .bind((total_pg_value + total_uraian_value) as i32)
+            .bind(total_pg_value + total_uraian_value)
             .bind(form.ujian_id)
             .bind(&form.nis)
             .execute(&db)

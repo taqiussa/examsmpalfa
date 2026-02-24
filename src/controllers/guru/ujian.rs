@@ -1,10 +1,10 @@
+use aws_sdk_s3::primitives::ByteStream;
 use axum::{
+    Json,
     extract::{Form, Multipart, Path, Query},
     http::{HeaderMap, StatusCode},
     response::{Html, IntoResponse, Redirect},
-    Json,
 };
-use aws_sdk_s3::primitives::ByteStream;
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, MySqlPool};
@@ -25,6 +25,7 @@ struct UjianListData {
 #[derive(Serialize, FromRow)]
 struct UjianRow {
     id: i64,
+    user_id: Option<u64>,
     title: String,
     description: Option<String>,
     tanggal: NaiveDate,
@@ -45,6 +46,8 @@ pub struct UjianFilter {
 #[derive(Deserialize)]
 pub struct ProgressFilter {
     pub ujian_id: Option<i64>,
+    #[serde(default, deserialize_with = "empty_string_as_none_i64")]
+    pub mata_pelajaran_id: Option<i64>,
     pub tahun: Option<String>,
 }
 
@@ -66,6 +69,7 @@ pub struct NilaiFilter {
 #[derive(Clone, Serialize, FromRow)]
 struct UjianOption {
     id: i64,
+    mata_pelajaran_id: Option<i64>,
     title: String,
     mata_pelajaran: Option<String>,
     is_active: i8,
@@ -82,7 +86,7 @@ struct UraianJawabanRow {
     jawaban_uraian: Option<String>,
     nilai_uraian: i32,
     status_uraian: Option<String>,
-    bobot_nilai: Option<i32>,
+    bobot_nilai: Option<f64>,
 }
 
 #[derive(Deserialize)]
@@ -98,11 +102,11 @@ struct NilaiKelasRow {
     nis: String,
     nama: Option<String>,
     kelas: Option<String>,
-    total_benar: Option<i64>,
-    total_salah: Option<i64>,
-    nilai_pg: Option<i64>,
-    nilai_uraian: Option<i64>,
-    total_nilai: Option<i64>,
+    total_benar: Option<f64>,
+    total_salah: Option<f64>,
+    nilai_pg: Option<f64>,
+    nilai_uraian: Option<f64>,
+    total_nilai: Option<f64>,
 }
 
 #[derive(Serialize)]
@@ -147,6 +151,7 @@ struct UjianDetailData {
 #[derive(Serialize, FromRow)]
 struct UjianDetailRow {
     id: i64,
+    user_id: Option<u64>,
     title: String,
     description: Option<String>,
     tanggal: NaiveDate,
@@ -167,7 +172,7 @@ struct SoalRow {
     opsi_d: Option<String>,
     opsi_e: Option<String>,
     kunci_jawaban: Option<String>,
-    bobot_nilai: Option<i32>,
+    bobot_nilai: Option<f64>,
     kategori: Option<String>,
     urutan: Option<i32>,
 }
@@ -187,7 +192,7 @@ struct HasilRow {
     nis: Option<String>,
     status: String,
     last_nomor: i32,
-    total_nilai: Option<i64>,
+    total_nilai: Option<f64>,
     submitted_at: Option<String>,
 }
 
@@ -202,7 +207,7 @@ struct CreateSoalData {
     opsi_d: String,
     opsi_e: String,
     kunci_jawaban: String,
-    bobot_nilai: i32,
+    bobot_nilai: f64,
     kategori: String,
 }
 
@@ -215,7 +220,7 @@ pub struct CreateSoalForm {
     pub opsi_d: String,
     pub opsi_e: String,
     pub kunci_jawaban: Option<String>,
-    pub bobot_nilai: Option<i32>,
+    pub bobot_nilai: Option<f64>,
     pub kategori: Option<String>,
 }
 
@@ -283,24 +288,45 @@ async fn fetch_mapel_options(db: &MySqlPool) -> Vec<MapelOption> {
 }
 
 async fn fetch_ujian_options(db: &MySqlPool, tahun: &str) -> Vec<UjianOption> {
-    sqlx::query_as::<_, UjianOption>(
+    let pattern = format!("%{}%", tahun.trim());
+    eprintln!(
+        "DEBUG fetch_ujian_options: bound tahun pattern='{}'",
+        pattern
+    );
+    match sqlx::query_as::<_, UjianOption>(
         r#"
         SELECT
-            u.id,
+            CAST(u.id AS SIGNED) as id,
+            CAST(u.mata_pelajaran_id AS SIGNED) as mata_pelajaran_id,
             u.title,
             mp.nama as mata_pelajaran,
             u.is_active
         FROM ujians u
-        JOIN mata_pelajarans mp ON mp.id = u.mata_pelajaran_id
-        WHERE u.tahun = ?
+        LEFT JOIN mata_pelajarans mp ON mp.id = u.mata_pelajaran_id
+        WHERE u.tahun LIKE ?
         ORDER BY u.created_at DESC
         LIMIT 200
         "#,
     )
-    .bind(tahun)
+    .bind(pattern)
     .fetch_all(db)
     .await
-    .unwrap_or_default()
+    {
+        Ok(rows) => {
+            eprintln!(
+                "DEBUG fetch_ujian_options: fetched {} ujian rows",
+                rows.len()
+            );
+            rows
+        }
+        Err(e) => {
+            eprintln!(
+                "ERROR fetch_ujian_options: query failed for tahun='{}': {:?}",
+                tahun, e
+            );
+            Vec::new()
+        }
+    }
 }
 
 pub async fn ujian_index(
@@ -335,6 +361,7 @@ pub async fn ujian_table(
         r#"
         SELECT
             u.id,
+            u.user_id,
             u.title,
             u.description,
             u.tanggal,
@@ -364,6 +391,7 @@ pub async fn ujian_table(
     tera_ctx.insert("list_ujian", &rows);
     tera_ctx.insert("filter_tahun", &tahun);
     tera_ctx.insert("filter_search", &search);
+    tera_ctx.insert("current_user_id", &ctx.user.id);
 
     let rendered = ctx
         .tera
@@ -373,7 +401,10 @@ pub async fn ujian_table(
     Html(rendered).into_response()
 }
 
-pub async fn ujian_create(ctx: PageContext, axum::Extension(db): axum::Extension<MySqlPool>) -> Html<String> {
+pub async fn ujian_create(
+    ctx: PageContext,
+    axum::Extension(db): axum::Extension<MySqlPool>,
+) -> Html<String> {
     let data = CreateUjianData {
         tahun: data_tahun(),
         title: String::new(),
@@ -405,7 +436,10 @@ pub async fn ujian_store(
         errors.insert("title".to_string(), "Judul ujian wajib diisi".to_string());
     }
     if form.tahun.trim().is_empty() {
-        errors.insert("tahun".to_string(), "Tahun ajaran wajib dipilih".to_string());
+        errors.insert(
+            "tahun".to_string(),
+            "Tahun ajaran wajib dipilih".to_string(),
+        );
     }
     if form.mata_pelajaran_id <= 0 {
         errors.insert(
@@ -440,9 +474,9 @@ pub async fn ujian_store(
     let result = sqlx::query(
         r#"
         INSERT INTO ujians
-            (mata_pelajaran_id, tahun, jurusan, title, description, tanggal, waktu_menit, is_active, created_by, created_at, updated_at)
+            (mata_pelajaran_id, tahun, jurusan, title, description, tanggal, waktu_menit, is_active, user_id, created_by, created_at, updated_at)
         VALUES
-            (?, ?, ?, ?, ?, ?, ?, FALSE, ?, NOW(), NOW())
+            (?, ?, ?, ?, ?, ?, ?, FALSE, ?, ?, NOW(), NOW())
         "#,
     )
     .bind(form.mata_pelajaran_id)
@@ -452,7 +486,8 @@ pub async fn ujian_store(
     .bind(&form.description)
     .bind(&form.tanggal)
     .bind(form.waktu_menit)
-    .bind(ctx.user.id as i64)
+    .bind(ctx.user.id)
+    .bind(ctx.user.id)
     .execute(&db)
     .await;
 
@@ -476,44 +511,12 @@ pub async fn ujian_show(
     Path(ujian_id): Path<i64>,
     axum::Extension(db): axum::Extension<MySqlPool>,
 ) -> axum::response::Response {
-    // Sinkronkan nilai akhir peserta submitted dari data jawaban aktual
-    // supaya data lama yang sempat tersimpan 0 ikut terkoreksi.
-    let _ = sqlx::query(
-        r#"
-        UPDATE ujian_pesertas p
-        LEFT JOIN (
-            SELECT
-                j.ujian_id,
-                j.nis,
-                COALESCE(
-                    SUM(
-                        CASE
-                            WHEN j.pilihan = s.kunci_jawaban THEN COALESCE(s.bobot_nilai, 1)
-                            ELSE 0
-                        END
-                    ),
-                    0
-                ) + COALESCE(SUM(COALESCE(j.nilai_uraian, 0)), 0) AS nilai_hitung
-            FROM ujian_jawabans j
-            JOIN soals s ON s.id = j.soal_id
-            WHERE j.ujian_id = ?
-            GROUP BY j.ujian_id, j.nis
-        ) x ON x.ujian_id = p.ujian_id AND x.nis = p.nis
-        SET p.total_nilai = COALESCE(x.nilai_hitung, 0),
-            p.updated_at = NOW()
-        WHERE p.ujian_id = ?
-          AND p.status = 'submitted'
-        "#,
-    )
-    .bind(ujian_id)
-    .bind(ujian_id)
-    .execute(&db)
-    .await;
-
+    // Show only ujian details and soal list; no student-related updates here.
     let ujian: Option<UjianDetailRow> = sqlx::query_as::<_, UjianDetailRow>(
         r#"
         SELECT
             u.id,
+            u.user_id,
             u.title,
             u.description,
             u.tanggal,
@@ -536,10 +539,11 @@ pub async fn ujian_show(
         return Redirect::to("/ujian").into_response();
     }
 
-    let list_soal: Vec<SoalRow> = sqlx::query_as::<_, SoalRow>(
+    // Fetch soal rows; cast ids to signed to match Rust i64, and surface DB errors
+    let list_soal: Vec<SoalRow> = match sqlx::query_as::<_, SoalRow>(
         r#"
         SELECT
-            s.id,
+            CAST(s.id AS SIGNED) as id,
             s.pertanyaan,
             s.opsi_a,
             s.opsi_b,
@@ -547,9 +551,9 @@ pub async fn ujian_show(
             s.opsi_d,
             s.opsi_e,
             s.kunci_jawaban,
-            s.bobot_nilai,
+            CAST(s.bobot_nilai AS DOUBLE) as bobot_nilai,
             s.kategori,
-            us.urutan
+            CAST(us.urutan AS SIGNED) as urutan
         FROM soals s
         JOIN ujian_soals us ON us.soal_id = s.id
         WHERE us.ujian_id = ?
@@ -559,69 +563,51 @@ pub async fn ujian_show(
     .bind(ujian_id)
     .fetch_all(&db)
     .await
-    .unwrap_or_default();
+    {
+        Ok(rows) => rows,
+        Err(e) => {
+            eprintln!(
+                "ERROR ujian_show: failed to fetch soals for ujian_id={}: {:?}",
+                ujian_id, e
+            );
+            Vec::new()
+        }
+    };
 
-    let list_token = sqlx::query_as::<_, TokenRow>(
-        r#"
-        SELECT
-            id,
-            token,
-            is_active,
-            DATE_FORMAT(expired_at, '%Y-%m-%d %H:%i') as expired_at,
-            DATE_FORMAT(created_at, '%Y-%m-%d %H:%i') as created_at
-        FROM ujian_tokens
-        WHERE ujian_id = ?
-        ORDER BY created_at DESC
-        LIMIT 20
-        "#,
-    )
-    .bind(ujian_id)
-    .fetch_all(&db)
-    .await
-    .unwrap_or_default();
+    // Debug: log how many soal we retrieved and their IDs
+    let soal_ids: Vec<i64> = list_soal.iter().map(|s| s.id).collect();
+    eprintln!(
+        "DEBUG ujian_show: ujian_id={}, fetched_soal_count={}, ids={:?}",
+        ujian_id,
+        list_soal.len(),
+        soal_ids
+    );
 
-    let list_hasil = sqlx::query_as::<_, HasilRow>(
-        r#"
-        SELECT
-            COALESCE(u.name, CONCAT('NIS ', p.nis)) as nama,
-            p.nis,
-            p.status,
-            p.last_nomor,
-            COALESCE(p.total_nilai, 0) as total_nilai,
-            DATE_FORMAT(p.submitted_at, '%Y-%m-%d %H:%i') as submitted_at
-        FROM ujian_pesertas p
-        LEFT JOIN users u ON u.nis = p.nis
-        WHERE p.ujian_id = ?
-        ORDER BY
-            CASE WHEN p.status = 'submitted' THEN 0 ELSE 1 END,
-            p.submitted_at DESC,
-            u.name ASC
-        "#,
-    )
-    .bind(ujian_id)
-    .fetch_all(&db)
-    .await
-    .unwrap_or_default();
+    let can_add = ujian
+        .as_ref()
+        .and_then(|u| u.user_id)
+        .map(|owner_id| owner_id == ctx.user.id)
+        .unwrap_or(false);
 
     let data = UjianDetailData {
         ujian,
         list_soal,
-        list_token,
-        list_hasil,
-        can_add_soal: true,
+        list_token: Vec::new(),
+        list_hasil: Vec::new(),
+        can_add_soal: can_add,
     };
 
     let html = render(&ctx, "guru/ujian/show.html", "Detail Ujian", data);
     Html(html.0).into_response()
 }
 
+mod nilai;
 mod progress;
 mod uraian;
-mod nilai;
 
-pub use progress::{ujian_progress, ujian_progress_active_panel};
-pub use uraian::{ujian_uraian_review, ujian_uraian_table, ujian_uraian_score};
 pub use nilai::{nilai_kelas_mapel_page, nilai_kelas_mapel_table};
+pub use progress::{ujian_progress, ujian_progress_active_panel};
+pub use uraian::{ujian_uraian_review, ujian_uraian_score, ujian_uraian_table};
 
 fn empty_string_as_none_i64<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
 where
@@ -678,19 +664,19 @@ pub async fn ujian_toggle_active(
     }
 
     if form.active == 1 {
-        let tahun: Option<String> = sqlx::query_scalar("SELECT tahun FROM ujians WHERE id = ? LIMIT 1")
-            .bind(ujian_id)
-            .fetch_optional(&db)
-            .await
-            .ok()
-            .flatten();
+        let tahun: Option<String> =
+            sqlx::query_scalar("SELECT tahun FROM ujians WHERE id = ? LIMIT 1")
+                .bind(ujian_id)
+                .fetch_optional(&db)
+                .await
+                .ok()
+                .flatten();
         if let Some(tahun) = tahun {
-            let _ = sqlx::query(
-                "UPDATE ujians SET is_active = 0, updated_at = NOW() WHERE tahun = ?",
-            )
-            .bind(tahun)
-            .execute(&db)
-            .await;
+            let _ =
+                sqlx::query("UPDATE ujians SET is_active = 0, updated_at = NOW() WHERE tahun = ?")
+                    .bind(tahun)
+                    .execute(&db)
+                    .await;
         }
     }
 
@@ -776,7 +762,7 @@ pub async fn ujian_generate_token(
     )
     .bind(ujian_id)
     .bind(token)
-    .bind(ctx.user.id as i64)
+    .bind(ctx.user.id)
     .execute(&db)
     .await;
 
@@ -938,6 +924,7 @@ pub async fn soal_create(
         r#"
         SELECT
             u.id,
+            u.user_id,
             u.title,
             u.description,
             u.tanggal,
@@ -970,7 +957,7 @@ pub async fn soal_create(
         opsi_d: String::new(),
         opsi_e: String::new(),
         kunci_jawaban: "a".to_string(),
-        bobot_nilai: 1,
+        bobot_nilai: 1.0,
         kategori: "Pilihan Ganda".to_string(),
     };
 
@@ -1023,31 +1010,75 @@ pub async fn soal_store(
         .unwrap_or("Pilihan Ganda");
 
     if kategori != "Uraian" {
-        if !has_visible_content(&form.opsi_a)
-            || !has_visible_content(&form.opsi_b)
-            || !has_visible_content(&form.opsi_c)
-            || !has_visible_content(&form.opsi_d)
-            || !has_visible_content(&form.opsi_e)
-        {
-            let mut headers =
-                flash_error("Opsi A, B, C, D, dan E wajib diisi (teks atau gambar).");
-            headers.insert("HX-Retarget", "#soal-form-container".parse().unwrap());
-            headers.insert("HX-Reswap", "none".parse().unwrap());
-            return (headers, Html(String::new())).into_response();
+        // For Pilihan Ganda and Kompleks require opsi content; for Benar/Salah we don't
+        if kategori != "Benar/Salah" {
+            if !has_visible_content(&form.opsi_a)
+                || !has_visible_content(&form.opsi_b)
+                || !has_visible_content(&form.opsi_c)
+                || !has_visible_content(&form.opsi_d)
+                || !has_visible_content(&form.opsi_e)
+            {
+                let mut headers =
+                    flash_error("Opsi A, B, C, D, dan E wajib diisi (teks atau gambar).");
+                headers.insert("HX-Retarget", "#soal-form-container".parse().unwrap());
+                headers.insert("HX-Reswap", "none".parse().unwrap());
+                return (headers, Html(String::new())).into_response();
+            }
         }
 
-        let Some(kunci) = form.kunci_jawaban.as_deref() else {
+        let Some(kunci_raw) = form.kunci_jawaban.as_deref() else {
             let mut headers = flash_error("Kunci jawaban wajib dipilih.");
             headers.insert("HX-Retarget", "#soal-form-container".parse().unwrap());
             headers.insert("HX-Reswap", "none".parse().unwrap());
             return (headers, Html(String::new())).into_response();
         };
 
-        if !matches!(kunci, "a" | "b" | "c" | "d" | "e") {
-            let mut headers = flash_error("Kunci jawaban tidak valid.");
-            headers.insert("HX-Retarget", "#soal-form-container".parse().unwrap());
-            headers.insert("HX-Reswap", "none".parse().unwrap());
-            return (headers, Html(String::new())).into_response();
+        let kunci = kunci_raw.trim().to_lowercase();
+
+        if kategori == "Pilihan Ganda" {
+            if !matches!(kunci.as_str(), "a" | "b" | "c" | "d" | "e") {
+                let mut headers = flash_error("Kunci jawaban tidak valid untuk Pilihan Ganda.");
+                headers.insert("HX-Retarget", "#soal-form-container".parse().unwrap());
+                headers.insert("HX-Reswap", "none".parse().unwrap());
+                return (headers, Html(String::new())).into_response();
+            }
+        } else if kategori == "Pilihan Ganda Kompleks" {
+            let parts: Vec<String> = kunci
+                .split(',')
+                .map(|s| s.trim().to_lowercase())
+                .filter(|s| !s.is_empty())
+                .collect();
+            if parts.len() != 2 {
+                let mut headers = flash_error(
+                    "Kunci Pilihan Ganda Kompleks harus berisi tepat 2 opsi (mis. a,c).",
+                );
+                headers.insert("HX-Retarget", "#soal-form-container".parse().unwrap());
+                headers.insert("HX-Reswap", "none".parse().unwrap());
+                return (headers, Html(String::new())).into_response();
+            }
+            for p in &parts {
+                if !matches!(p.as_str(), "a" | "b" | "c" | "d" | "e") {
+                    let mut headers =
+                        flash_error("Kunci Pilihan Ganda Kompleks berisi opsi tidak valid.");
+                    headers.insert("HX-Retarget", "#soal-form-container".parse().unwrap());
+                    headers.insert("HX-Reswap", "none".parse().unwrap());
+                    return (headers, Html(String::new())).into_response();
+                }
+            }
+        } else if kategori == "Benar/Salah" {
+            if !matches!(kunci.as_str(), "benar" | "salah") {
+                let mut headers = flash_error("Kunci Benar/Salah harus 'benar' atau 'salah'.");
+                headers.insert("HX-Retarget", "#soal-form-container".parse().unwrap());
+                headers.insert("HX-Reswap", "none".parse().unwrap());
+                return (headers, Html(String::new())).into_response();
+            }
+        } else {
+            if !matches!(kunci.as_str(), "a" | "b" | "c" | "d" | "e") {
+                let mut headers = flash_error("Kunci jawaban tidak valid.");
+                headers.insert("HX-Retarget", "#soal-form-container".parse().unwrap());
+                headers.insert("HX-Reswap", "none".parse().unwrap());
+                return (headers, Html(String::new())).into_response();
+            }
         }
     }
 
@@ -1081,6 +1112,10 @@ pub async fn soal_store(
         }
     };
 
+    eprintln!(
+        "DEBUG soal_store: ujian_id={}, kategori={}, kunci={:?}, bobot_nilai={:?}",
+        ujian_id, kategori, form.kunci_jawaban, form.bobot_nilai
+    );
     let result = sqlx::query(
         r#"
         INSERT INTO soals (pertanyaan, opsi_a, opsi_b, opsi_c, opsi_d, opsi_e, kunci_jawaban, bobot_nilai, kategori, created_at, updated_at)
@@ -1094,15 +1129,25 @@ pub async fn soal_store(
     .bind(opsi_d)
     .bind(opsi_e)
     .bind(kunci_jawaban)
-    .bind(form.bobot_nilai.unwrap_or(1))
+    .bind(form.bobot_nilai.unwrap_or(1.0))
     .bind(kategori)
     .execute(&mut *tx)
     .await;
 
     let result = match result {
-        Ok(result) => result,
+        Ok(result) => {
+            eprintln!(
+                "DEBUG soal_store: insert soals OK, last_insert_id={}, rows_affected={}",
+                result.last_insert_id(),
+                result.rows_affected()
+            );
+            result
+        }
         Err(e) => {
-            eprintln!("Error creating soal: {:?}", e);
+            eprintln!(
+                "Error creating soal (insert soals) for ujian_id={}: {:?}",
+                ujian_id, e
+            );
             let _ = tx.rollback().await;
             let mut headers = flash_error("Gagal menambahkan soal!");
             headers.insert("HX-Retarget", "#soal-form-container".parse().unwrap());
@@ -1113,14 +1158,13 @@ pub async fn soal_store(
 
     let soal_id = result.last_insert_id() as i64;
 
-    let max_urutan: Option<i64> = sqlx::query_scalar(
-        "SELECT MAX(urutan) FROM ujian_soals WHERE ujian_id = ?",
-    )
-    .bind(ujian_id)
-    .fetch_one(&mut *tx)
-    .await
-    .ok()
-    .flatten();
+    let max_urutan: Option<i64> =
+        sqlx::query_scalar("SELECT MAX(urutan) FROM ujian_soals WHERE ujian_id = ?")
+            .bind(ujian_id)
+            .fetch_one(&mut *tx)
+            .await
+            .ok()
+            .flatten();
 
     let urutan = max_urutan.unwrap_or(0) + 1;
 
@@ -1133,8 +1177,18 @@ pub async fn soal_store(
     .execute(&mut *tx)
     .await;
 
-    if let Err(e) = link_result {
-        eprintln!("Error linking soal to ujian: {:?}", e);
+    match &link_result {
+        Ok(r) => eprintln!(
+            "DEBUG soal_store: linked soal to ujian ok, rows_affected={}",
+            r.rows_affected()
+        ),
+        Err(e) => eprintln!(
+            "Error linking soal to ujian (ujian_id={}, soal_id={}): {:?}",
+            ujian_id, soal_id, e
+        ),
+    }
+
+    if link_result.is_err() {
         let _ = tx.rollback().await;
         let mut headers = flash_error("Gagal menyimpan relasi soal ke ujian.");
         headers.insert("HX-Retarget", "#soal-form-container".parse().unwrap());
@@ -1143,18 +1197,29 @@ pub async fn soal_store(
     }
 
     if let Err(e) = tx.commit().await {
-        eprintln!("Error commit soal transaction: {:?}", e);
+        eprintln!(
+            "Error commit soal transaction (ujian_id={}, soal_id={}): {:?}",
+            ujian_id, soal_id, e
+        );
         let mut headers = flash_error("Gagal menyimpan soal.");
         headers.insert("HX-Retarget", "#soal-form-container".parse().unwrap());
         headers.insert("HX-Reswap", "none".parse().unwrap());
         return (headers, Html(String::new())).into_response();
+    } else {
+        eprintln!(
+            "DEBUG soal_store: transaction committed successfully for ujian_id={}, soal_id={}",
+            ujian_id, soal_id
+        );
     }
 
-    let mut headers = flash_success("Soal berhasil ditambahkan!");
-    headers.insert(
-        "HX-Redirect",
-        format!("/ujian/{}", ujian_id).parse().unwrap(),
+    eprintln!(
+        "DEBUG soal_store: returning success flash for ujian_id={}, soal_id={}",
+        ujian_id, soal_id
     );
+    let mut headers = flash_success("Soal berhasil ditambahkan!");
+    // Trigger a client-side event so the form can be cleared without redirect
+    // Use After-Settle so existing HX-Trigger (flash) is preserved
+    headers.insert("HX-Trigger-After-Settle", "soal:created".parse().unwrap());
     (headers, Html(String::new())).into_response()
 }
 
@@ -1174,11 +1239,7 @@ pub async fn soal_image_upload(
     }
 
     let Some(s3) = s3 else {
-        return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            "S3 belum dikonfigurasi.",
-        )
-            .into_response();
+        return (StatusCode::SERVICE_UNAVAILABLE, "S3 belum dikonfigurasi.").into_response();
     };
 
     let mut data: Option<(Vec<u8>, String)> = None;
@@ -1217,11 +1278,7 @@ pub async fn soal_image_upload(
 
     const MAX_BYTES: usize = 5 * 1024 * 1024;
     if bytes.len() > MAX_BYTES {
-        return (
-            StatusCode::PAYLOAD_TOO_LARGE,
-            "Ukuran gambar maksimal 5MB.",
-        )
-            .into_response();
+        return (StatusCode::PAYLOAD_TOO_LARGE, "Ukuran gambar maksimal 5MB.").into_response();
     }
 
     let ext = match content_type.as_str() {

@@ -7,13 +7,10 @@ use sqlx::MySqlPool;
 use tera::Context;
 
 use crate::utils::{
-    list_kelas::list_kelas,
-    page_context::PageContext,
-    render::render,
-    tahun::data_tahun,
+    list_kelas::list_kelas, page_context::PageContext, render::render, tahun::data_tahun,
 };
 
-use super::{fetch_mapel_options, NilaiFilter, NilaiKelasRow, MapelOption};
+use super::{MapelOption, NilaiFilter, NilaiKelasRow, fetch_mapel_options};
 use crate::controllers::guru::absensi_kelas::Htmx;
 
 #[derive(Serialize)]
@@ -74,24 +71,25 @@ pub async fn nilai_kelas_mapel_table(
     let mut rows: Vec<NilaiKelasRow> = Vec::new();
 
     if kelas_id > 0 {
+        // fetch student list; fill numeric result columns with 0 so mapping to `NilaiKelasRow` succeeds
         rows = sqlx::query_as::<_, NilaiKelasRow>(
             r#"
-            SELECT
-                TRIM(s.nis) as nis,
-                u.name as nama,
-                k.nama as kelas,
-                NULL as total_benar,
-                NULL as total_salah,
-                NULL as nilai_pg,
-                NULL as nilai_uraian,
-                NULL as total_nilai
-            FROM siswas s
-            JOIN kelas k ON k.id = s.kelas_id
-            LEFT JOIN users u ON u.nis = s.nis
-            WHERE s.kelas_id = ?
-              AND s.tahun = ?
-            ORDER BY u.name IS NULL, u.name ASC, s.nis ASC
-            "#,
+                        SELECT
+                                TRIM(s.nis) as nis,
+                                u.name as nama,
+                                k.nama as kelas,
+                                0.0 as total_benar,
+                                0.0 as total_salah,
+                                0.0 as nilai_pg,
+                                0.0 as nilai_uraian,
+                                0.0 as total_nilai
+                        FROM siswas s
+                        JOIN kelas k ON k.id = s.kelas_id
+                        LEFT JOIN users u ON u.nis = s.nis
+                        WHERE s.kelas_id = ?
+                            AND s.tahun = ?
+                        ORDER BY u.name IS NULL, u.name ASC, s.nis ASC
+                        "#,
         )
         .bind(kelas_id)
         .bind(&tahun)
@@ -100,34 +98,31 @@ pub async fn nilai_kelas_mapel_table(
         .unwrap_or_default();
 
         if mata_pelajaran_id > 0 {
-            let nilai_map: std::collections::HashMap<String, (i64, i64, i64, i64, i64)> =
-                sqlx::query_as::<_, (String, i64, i64, i64, i64, i64)>(
+            // fetch hasil_nilais for the selected mata_pelajaran and tahun (one row per nis)
+            let nilai_map: std::collections::HashMap<String, (f64, f64, f64, f64, f64)> =
+                sqlx::query_as::<_, (String, f64, f64, f64, f64, f64)>(
                     r#"
                     SELECT
                         TRIM(h.nis) as nis,
-                        COALESCE(SUM(h.total_benar), 0) as total_benar,
-                        COALESCE(SUM(h.total_salah), 0) as total_salah,
-                        COALESCE(SUM(h.total_pg), 0) as nilai_pg,
-                        COALESCE(SUM(COALESCE(h.total_uraian, 0)), 0) as nilai_uraian,
-                        COALESCE(SUM(h.total_nilai), 0) as total_nilai
+                        CAST(COALESCE(h.total_benar, 0) AS DOUBLE) as total_benar,
+                        CAST(COALESCE(h.total_salah, 0) AS DOUBLE) as total_salah,
+                        CAST(COALESCE(h.total_pg, 0) AS DOUBLE) as nilai_pg,
+                        CAST(COALESCE(h.total_uraian, 0) AS DOUBLE) as nilai_uraian,
+                        CAST(COALESCE(h.total_nilai, 0) AS DOUBLE) as total_nilai
                     FROM hasil_nilais h
-                    JOIN siswas s ON s.nis = h.nis
                     WHERE h.mata_pelajaran_id = ?
                       AND h.tahun = ?
-                      AND s.kelas_id = ?
-                      AND s.tahun = ?
-                    GROUP BY h.nis
                     "#,
                 )
                 .bind(mata_pelajaran_id)
-                .bind(&tahun)
-                .bind(kelas_id)
                 .bind(&tahun)
                 .fetch_all(&db)
                 .await
                 .unwrap_or_default()
                 .into_iter()
-                .map(|(nis, benar, salah, pg, uraian, total)| (nis, (benar, salah, pg, uraian, total)))
+                .map(|(nis, benar, salah, pg, uraian, total)| {
+                    (nis, (benar, salah, pg, uraian, total))
+                })
                 .collect();
 
             for row in &mut rows {

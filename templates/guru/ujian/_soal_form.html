@@ -29,6 +29,11 @@
                                         <select id="kategori-select" name="kategori" class="input w-full">
                                                 <option value="Pilihan Ganda" {% if data.kategori=="Pilihan Ganda"
                                                         %}selected{% endif %}>Pilihan Ganda</option>
+                                                <option value="Pilihan Ganda Kompleks" {% if
+                                                        data.kategori=="Pilihan Ganda Kompleks" %}selected{% endif %}>
+                                                        Pilihan Ganda Kompleks</option>
+                                                <option value="Benar/Salah" {% if data.kategori=="Benar/Salah"
+                                                        %}selected{% endif %}>Benar/Salah</option>
                                                 <option value="Uraian" {% if data.kategori=="Uraian" %}selected{% endif
                                                         %}>Uraian</option>
                                         </select>
@@ -38,16 +43,45 @@
                                         <label class="block text-sm font-medium text-slate-700 mb-1">
                                                 Kunci Jawaban <span class="text-rose-500">*</span>
                                         </label>
-                                        <select name="kunci_jawaban" class="input w-full" required>
-                                                <option value="a" {% if data.kunci_jawaban=='a' %}selected{% endif %}>A
-                                                </option>
-                                                <option value="b" {% if data.kunci_jawaban=='b' %}selected{% endif %}>B
-                                                </option>
-                                                <option value="c" {% if data.kunci_jawaban=='c' %}selected{% endif %}>C
-                                                </option>
-                                                <option value="d" {% if data.kunci_jawaban=='d' %}selected{% endif %}>D
-                                                </option>
-                                        </select>
+                                        <input type="hidden" name="kunci_jawaban" id="kunci-jawaban-input"
+                                                value="{{ data.kunci_jawaban }}">
+                                        <div id="kunci-single">
+                                                <select id="kunci-single-select" class="input w-full">
+                                                        <option value="a" {% if data.kunci_jawaban=='a' %}selected{%
+                                                                endif %}>A</option>
+                                                        <option value="b" {% if data.kunci_jawaban=='b' %}selected{%
+                                                                endif %}>B</option>
+                                                        <option value="c" {% if data.kunci_jawaban=='c' %}selected{%
+                                                                endif %}>C</option>
+                                                        <option value="d" {% if data.kunci_jawaban=='d' %}selected{%
+                                                                endif %}>D</option>
+                                                        <option value="e" {% if data.kunci_jawaban=='e' %}selected{%
+                                                                endif %}>E</option>
+                                                </select>
+                                        </div>
+                                        <div id="kunci-kompleks" class="hidden space-y-2">
+                                                <div class="text-xs text-slate-600">Pilih tepat 2 kunci.</div>
+                                                <div class="grid grid-cols-5 gap-2">
+                                                        <label><input type="checkbox" class="kunci-kompleks-checkbox"
+                                                                        value="a"> A</label>
+                                                        <label><input type="checkbox" class="kunci-kompleks-checkbox"
+                                                                        value="b"> B</label>
+                                                        <label><input type="checkbox" class="kunci-kompleks-checkbox"
+                                                                        value="c"> C</label>
+                                                        <label><input type="checkbox" class="kunci-kompleks-checkbox"
+                                                                        value="d"> D</label>
+                                                        <label><input type="checkbox" class="kunci-kompleks-checkbox"
+                                                                        value="e"> E</label>
+                                                </div>
+                                        </div>
+                                        <div id="kunci-truefalse" class="hidden">
+                                                <select id="kunci-truefalse-select" class="input w-full">
+                                                        <option value="benar" {% if data.kunci_jawaban=='benar'
+                                                                %}selected{% endif %}>Benar</option>
+                                                        <option value="salah" {% if data.kunci_jawaban=='salah'
+                                                                %}selected{% endif %}>Salah</option>
+                                                </select>
+                                        </div>
                                 </div>
 
                                 <div>
@@ -63,7 +97,8 @@
 
                 <!-- Options (Rich text + image) -->
                 <div id="opsi-section" class="mb-10 md:mb-20">
-                        <div class="md:grid md:grid-cols-2 md:space-y-0 space-y-5 gap-5 mb-3 py-3 md:mb-20">
+                        <div id="opsi-block-1"
+                                class="md:grid md:grid-cols-2 md:space-y-0 space-y-5 gap-5 mb-3 py-3 md:mb-20">
                                 <div>
                                         <label class="block text-sm font-medium text-slate-700 mb-1">
                                                 Opsi A <span class="text-emerald-500">✓</span>
@@ -81,7 +116,8 @@
                                 </div>
                         </div>
 
-                        <div class="md:grid md:grid-cols-2 md:space-y-0 space-y-5 gap-5 mb-3 py-3">
+                        <div id="opsi-block-2"
+                                class="md:grid md:grid-cols-2 md:space-y-0 space-y-5 gap-5 mb-3 py-3 md:mb-20">
                                 <div>
                                         <label class="block text-sm font-medium text-slate-700 mb-1">
                                                 Opsi C
@@ -96,6 +132,15 @@
                                         </label>
                                         <input type="hidden" name="opsi_d" id="opsi-d-input" value="{{ data.opsi_d }}">
                                         <div id="opsi-d-editor" class="bg-white opsi-editor"></div>
+                                </div>
+                        </div>
+                        <div id="opsi-block-3" class="md:grid md:grid-cols-2 md:space-y-0 space-y-5 gap-5 mb-3 py-3">
+                                <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-1">
+                                                Opsi E
+                                        </label>
+                                        <input type="hidden" name="opsi_e" id="opsi-e-input" value="{{ data.opsi_e }}">
+                                        <div id="opsi-e-editor" class="bg-white opsi-editor"></div>
                                 </div>
                         </div>
                 </div>
@@ -196,12 +241,14 @@
                 var quillB = buildQuill('#opsi-b-editor', 'Jawaban opsi B', 'opsi_b');
                 var quillC = buildQuill('#opsi-c-editor', 'Jawaban opsi C', 'opsi_c');
                 var quillD = buildQuill('#opsi-d-editor', 'Jawaban opsi D', 'opsi_d');
+                var quillE = buildQuill('#opsi-e-editor', 'Jawaban opsi E', 'opsi_e');
 
                 var pertanyaanInput = document.getElementById('pertanyaan-input');
                 var opsiAInput = document.getElementById('opsi-a-input');
                 var opsiBInput = document.getElementById('opsi-b-input');
                 var opsiCInput = document.getElementById('opsi-c-input');
                 var opsiDInput = document.getElementById('opsi-d-input');
+                var opsiEInput = document.getElementById('opsi-e-input');
 
                 function setInitial(quill, input) {
                         if (input && input.value) {
@@ -214,6 +261,7 @@
                 setInitial(quillB, opsiBInput);
                 setInitial(quillC, opsiCInput);
                 setInitial(quillD, opsiDInput);
+                setInitial(quillE, opsiEInput);
 
                 var form = document.getElementById('soal-form');
                 function syncInputs() {
@@ -222,6 +270,7 @@
                         opsiBInput.value = quillB.root.innerHTML;
                         opsiCInput.value = quillC.root.innerHTML;
                         opsiDInput.value = quillD.root.innerHTML;
+                        opsiEInput.value = quillE.root.innerHTML;
                 }
 
                 function toggleKategori() {
@@ -236,12 +285,50 @@
                                         kunciSelect.disabled = true;
                                         kunciSelect.required = false;
                                 }
+                        } else if (kategoriSelect.value === 'Benar/Salah') {
+                                // For True/False we don't need opsi inputs — hide opsi section
+                                opsiSection.classList.add('hidden');
+                                kunciSection.classList.remove('hidden');
+                                var kunciSingle = document.getElementById('kunci-single');
+                                var kunciKompleks = document.getElementById('kunci-kompleks');
+                                var kunciTF = document.getElementById('kunci-truefalse');
+                                if (kunciSingle) kunciSingle.classList.add('hidden');
+                                if (kunciKompleks) kunciKompleks.classList.add('hidden');
+                                if (kunciTF) kunciTF.classList.remove('hidden');
+                                if (kunciSelect) kunciSelect.disabled = false;
                         } else {
                                 opsiSection.classList.remove('hidden');
                                 kunciSection.classList.remove('hidden');
-                                if (kunciSelect) {
-                                        kunciSelect.disabled = false;
-                                        kunciSelect.required = true;
+                                var block1 = document.getElementById('opsi-block-1');
+                                var block2 = document.getElementById('opsi-block-2');
+                                var block3 = document.getElementById('opsi-block-3');
+                                if (block1) block1.classList.remove('hidden');
+                                if (block2) block2.classList.remove('hidden');
+                                if (block3) block3.classList.remove('hidden');
+                                // show appropriate kunci control
+                                var kunciSingle = document.getElementById('kunci-single');
+                                var kunciKompleks = document.getElementById('kunci-kompleks');
+                                var kunciTF = document.getElementById('kunci-truefalse');
+                                var kunciInputHidden = document.getElementById('kunci-jawaban-input');
+                                if (kategoriSelect.value === 'Pilihan Ganda') {
+                                        if (kunciSingle) kunciSingle.classList.remove('hidden');
+                                        if (kunciKompleks) kunciKompleks.classList.add('hidden');
+                                        if (kunciTF) kunciTF.classList.add('hidden');
+                                } else if (kategoriSelect.value === 'Pilihan Ganda Kompleks') {
+                                        if (kunciSingle) kunciSingle.classList.add('hidden');
+                                        if (kunciKompleks) kunciKompleks.classList.remove('hidden');
+                                        if (kunciTF) kunciTF.classList.add('hidden');
+                                } else if (kategoriSelect.value === 'Benar/Salah') {
+                                        if (kunciSingle) kunciSingle.classList.add('hidden');
+                                        if (kunciKompleks) kunciKompleks.classList.add('hidden');
+                                        if (kunciTF) kunciTF.classList.remove('hidden');
+                                } else {
+                                        if (kunciSingle) kunciSingle.classList.remove('hidden');
+                                        if (kunciKompleks) kunciKompleks.classList.add('hidden');
+                                        if (kunciTF) kunciTF.classList.add('hidden');
+                                }
+                                if (kunciInputHidden) {
+                                        kunciInputHidden.disabled = false;
                                 }
                         }
                 }
@@ -249,10 +336,60 @@
                 form.addEventListener('submit', syncInputs);
                 form.addEventListener('htmx:beforeRequest', syncInputs);
 
+                // populate hidden kunci input before submit
+                form.addEventListener('submit', function (e) {
+                        var kategori = kategoriSelect ? kategoriSelect.value : '';
+                        var hidden = document.getElementById('kunci-jawaban-input');
+                        if (!hidden) return;
+                        if (kategori === 'Pilihan Ganda') {
+                                var sel = document.getElementById('kunci-single-select');
+                                hidden.value = sel ? sel.value : '';
+                        } else if (kategori === 'Pilihan Ganda Kompleks') {
+                                var checks = Array.from(document.querySelectorAll('.kunci-kompleks-checkbox:checked'));
+                                if (checks.length !== 2) {
+                                        e.preventDefault();
+                                        alert('Pilih tepat 2 kunci jawaban.');
+                                        return;
+                                }
+                                hidden.value = checks.map(c => c.value).join(',');
+                        } else if (kategori === 'Benar/Salah') {
+                                var sel = document.getElementById('kunci-truefalse-select');
+                                hidden.value = sel ? sel.value : '';
+                        }
+                });
+
                 if (kategoriSelect) {
                         kategoriSelect.addEventListener('change', toggleKategori);
                         toggleKategori();
                 }
+
+                // Clear form when a soal is created (triggered by server via HX-Trigger)
+                document.addEventListener('soal:created', function () {
+                        // clear quill editors
+                        quillPertanyaan.root.innerHTML = '';
+                        quillA.root.innerHTML = '';
+                        quillB.root.innerHTML = '';
+                        quillC.root.innerHTML = '';
+                        quillD.root.innerHTML = '';
+                        quillE.root.innerHTML = '';
+                        // clear hidden inputs
+                        pertanyaanInput.value = '';
+                        opsiAInput.value = '';
+                        opsiBInput.value = '';
+                        opsiCInput.value = '';
+                        opsiDInput.value = '';
+                        opsiEInput.value = '';
+                        // reset kunci inputs
+                        var kSingle = document.getElementById('kunci-single-select');
+                        if (kSingle) kSingle.selectedIndex = 0;
+                        var kTF = document.getElementById('kunci-truefalse-select');
+                        if (kTF) kTF.selectedIndex = 0;
+                        var checks = document.querySelectorAll('.kunci-kompleks-checkbox');
+                        checks.forEach(c => c.checked = false);
+                        // reset bobot
+                        var bobot = document.querySelector('input[name="bobot_nilai"]');
+                        if (bobot) bobot.value = 1;
+                });
         });
 </script>
 

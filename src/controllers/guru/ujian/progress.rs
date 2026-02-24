@@ -8,9 +8,7 @@ use sqlx::MySqlPool;
 
 use crate::utils::{page_context::PageContext, render::render, tahun::data_tahun};
 
-use super::{
-    fetch_ujian_options, HasilRow, ProgressFilter, TokenRow, UjianDetailRow, UjianOption,
-};
+use super::{HasilRow, ProgressFilter, TokenRow, UjianDetailRow, UjianOption, fetch_ujian_options};
 
 use crate::controllers::guru::absensi_kelas::Htmx;
 
@@ -36,15 +34,52 @@ pub async fn ujian_progress(
     Query(filter): Query<ProgressFilter>,
     axum::Extension(db): axum::Extension<MySqlPool>,
 ) -> axum::response::Response {
+    // Debug incoming filter
+    eprintln!(
+        "DEBUG ujian_progress: filter.ujian_id={:?}, filter.tahun={:?}, filter.mata_pelajaran_id={:?}",
+        filter.ujian_id, filter.tahun, filter.mata_pelajaran_id
+    );
+
     let tahun = filter.tahun.clone().unwrap_or_else(data_tahun);
     let list_ujian = fetch_ujian_options(&db, &tahun).await;
+    // Debug list_ujian contents to ensure mata_pelajaran is present
+    eprintln!(
+        "DEBUG ujian_progress: list_ujian.count={}",
+        list_ujian.len()
+    );
+    for u in &list_ujian {
+        eprintln!(
+            "DEBUG ujian_progress: ujian_option id={} mata_pelajaran_id={:?} mata_pelajaran={:?} is_active={}",
+            u.id, u.mata_pelajaran_id, u.mata_pelajaran, u.is_active
+        );
+    }
+
     let active_ujian = list_ujian.iter().find(|u| u.is_active == 1).cloned();
 
     let mut selected_ujian: Option<UjianDetailRow> = None;
     let mut list_hasil: Vec<HasilRow> = Vec::new();
     let mut list_token: Vec<TokenRow> = Vec::new();
 
-    if let Some(ujian_id) = filter.ujian_id {
+    // Determine ujian_id to show: prefer explicit ujian_id, otherwise try to pick
+    // the first ujian matching provided mata_pelajaran_id (if any)
+    let mut ujian_to_show: Option<i64> = filter.ujian_id;
+    if ujian_to_show.is_none() {
+        if let Some(mapel_id) = filter.mata_pelajaran_id {
+            if let Some(found) = list_ujian
+                .iter()
+                .find(|u| u.mata_pelajaran_id == Some(mapel_id))
+            {
+                ujian_to_show = Some(found.id);
+            }
+        }
+    }
+
+    eprintln!(
+        "DEBUG ujian_progress: resolved ujian_to_show={:?}",
+        ujian_to_show
+    );
+
+    if let Some(ujian_id) = ujian_to_show {
         let _ = sqlx::query(
             r#"
             UPDATE ujian_pesertas p
@@ -54,19 +89,32 @@ pub async fn ujian_progress(
                     j.nis,
                     COALESCE(
                         SUM(
-                            CASE
-                                WHEN j.pilihan = s.kunci_jawaban THEN COALESCE(s.bobot_nilai, 1)
-                                ELSE 0
-                            END
+                            CAST(
+                                CASE
+                                    WHEN j.is_benar = 1 THEN COALESCE(CAST(j.bobot_nilai AS DECIMAL(5,2)), 0)
+                                    ELSE 0
+                                END AS DECIMAL(5,2)
+                            ),
+                            0
                         ),
                         0
-                    ) + COALESCE(SUM(COALESCE(j.nilai_uraian, 0)), 0) AS nilai_hitung
+                    ) + COALESCE(
+                        SUM(
+                            CAST(
+                                CASE
+                                    WHEN j.nilai_uraian IS NOT NULL THEN COALESCE(CAST(j.nilai_uraian AS DECIMAL(5,2)), 0)
+                                    ELSE 0
+                                END AS DECIMAL(5,2)
+                            )
+                        ),
+                        0
+                    ) AS nilai_hitung
                 FROM ujian_jawabans j
                 JOIN soals s ON s.id = j.soal_id
                 WHERE j.ujian_id = ?
                 GROUP BY j.ujian_id, j.nis
             ) x ON x.ujian_id = p.ujian_id AND x.nis = p.nis
-            SET p.total_nilai = COALESCE(x.nilai_hitung, 0),
+            SET p.total_nilai = COALESCE(CAST(x.nilai_hitung AS DECIMAL(5,2)), 0),
                 p.updated_at = NOW()
             WHERE p.ujian_id = ?
               AND p.status = 'submitted'
@@ -77,10 +125,11 @@ pub async fn ujian_progress(
         .execute(&db)
         .await;
 
-        selected_ujian = sqlx::query_as::<_, UjianDetailRow>(
+        selected_ujian = match sqlx::query_as::<_, UjianDetailRow>(
             r#"
             SELECT
                 u.id,
+                u.user_id,
                 u.title,
                 u.description,
                 u.tanggal,
@@ -97,7 +146,16 @@ pub async fn ujian_progress(
         .bind(ujian_id)
         .fetch_optional(&db)
         .await
-        .unwrap_or(None);
+        {
+            Ok(opt) => opt,
+            Err(e) => {
+                eprintln!(
+                    "ERROR ujian_progress: failed to fetch ujian detail for id={}: {:?}",
+                    ujian_id, e
+                );
+                None
+            }
+        };
 
         if selected_ujian.is_some() {
             list_token = sqlx::query_as::<_, TokenRow>(
@@ -117,7 +175,13 @@ pub async fn ujian_progress(
             .bind(ujian_id)
             .fetch_all(&db)
             .await
-            .unwrap_or_default();
+            .unwrap_or_else(|e| {
+                eprintln!(
+                    "ERROR ujian_progress: failed to fetch tokens for ujian_id={}: {:?}",
+                    ujian_id, e
+                );
+                Vec::new()
+            });
 
             list_hasil = sqlx::query_as::<_, HasilRow>(
                 r#"
@@ -126,7 +190,7 @@ pub async fn ujian_progress(
                     p.nis,
                     p.status,
                     p.last_nomor,
-                    COALESCE(p.total_nilai, 0) as total_nilai,
+                    CAST(COALESCE(p.total_nilai, 0) AS DOUBLE) as total_nilai,
                     DATE_FORMAT(p.submitted_at, '%Y-%m-%d %H:%i') as submitted_at
                 FROM ujian_pesertas p
                 LEFT JOIN users u ON u.nis = p.nis
@@ -140,9 +204,20 @@ pub async fn ujian_progress(
             .bind(ujian_id)
             .fetch_all(&db)
             .await
-            .unwrap_or_default();
+            .unwrap_or_else(|e| {
+                eprintln!(
+                    "ERROR ujian_progress: failed to fetch hasil for ujian_id={}: {:?}",
+                    ujian_id, e
+                );
+                Vec::new()
+            });
         }
     }
+
+    eprintln!(
+        "DEBUG ujian_progress: selected_ujian present={}",
+        selected_ujian.is_some()
+    );
 
     let data = UjianProgressData {
         tahun,
@@ -160,7 +235,12 @@ pub async fn ujian_progress(
         .unwrap_or(false);
 
     if is_htmx && !is_boosted {
-        let html = render(&ctx, "guru/ujian/_progress_content.html", "Progress Ujian", data);
+        let html = render(
+            &ctx,
+            "guru/ujian/_progress_content.html",
+            "Progress Ujian",
+            data,
+        );
         Html(html.0).into_response()
     } else {
         let html = render(&ctx, "guru/ujian/progress.html", "Progress Ujian", data);

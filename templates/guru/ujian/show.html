@@ -113,7 +113,20 @@
                                         <div class="prose prose-sm max-w-none mb-4">
                                                 {{ s.pertanyaan | safe }}
                                         </div>
-                                        {% if s.kategori != "Uraian" %}
+                                        {% if s.kategori == "Benar/Salah" %}
+                                        <div class="grid grid-cols-2 gap-2 text-sm">
+                                                <div class="flex items-center gap-2">
+                                                        <span
+                                                                class="w-6 h-6 rounded flex items-center justify-center text-xs font-medium {% if s.kunci_jawaban == 'benar' %} bg-emerald-400 text-white {% else %} bg-slate-200 {% endif %}">B</span>
+                                                        <span>Benar</span>
+                                                </div>
+                                                <div class="flex items-center gap-2">
+                                                        <span
+                                                                class="w-6 h-6 rounded flex items-center justify-center text-xs font-medium {% if s.kunci_jawaban == 'salah' %} bg-emerald-400 text-white {% else %} bg-slate-200 {% endif %}">S</span>
+                                                        <span>Salah</span>
+                                                </div>
+                                        </div>
+                                        {% elif s.kategori != "Uraian" %}
                                         <div class="grid grid-cols-2 gap-2 text-sm">
                                                 <div class="flex items-center gap-2">
                                                         <span
@@ -137,6 +150,13 @@
                                                         <span
                                                                 class="w-6 h-6 rounded flex items-center justify-center text-xs font-medium {% if s.kunci_jawaban == 'd' %} bg-emerald-400 text-white {% else %} bg-slate-200 {% endif %}">D</span>
                                                         <span>{{ s.opsi_d | safe }}</span>
+                                                </div>
+                                                {% endif %}
+                                                {% if s.opsi_e %}
+                                                <div class="flex items-center gap-2">
+                                                        <span
+                                                                class="w-6 h-6 rounded flex items-center justify-center text-xs font-medium {% if s.kunci_jawaban == 'e' %} bg-emerald-400 text-white {% else %} bg-slate-200 {% endif %}">E</span>
+                                                        <span>{{ s.opsi_e | safe }}</span>
                                                 </div>
                                                 {% endif %}
                                         </div>
