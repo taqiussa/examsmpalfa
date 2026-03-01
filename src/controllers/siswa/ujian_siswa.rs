@@ -333,6 +333,10 @@ pub async fn ujian_session_page(
 
     let deadline = header.started_at + Duration::minutes(header.waktu_menit as i64);
     if Utc::now().naive_utc() > deadline {
+        eprintln!(
+            "DEBUG ujian_session_page: waktu habis, auto finalize - peserta_id={}, ujian_id={}, nis={}",
+            peserta_id, header.ujian_id, nis
+        );
         let _ = finalize_submission(&db, header.ujian_id, &nis, peserta_id).await;
         return Redirect::to("/siswa/ujian?message=Waktu+ujian+habis.+Jawaban+otomatis+disubmit")
             .into_response();
@@ -629,6 +633,12 @@ pub async fn ujian_submit(
         "DEBUG ujian_submit: peserta_id={}, form.soal_id={:?}, form.pilihan={:?}, form.jawaban_uraian={:?}",
         peserta_id, form.soal_id, form.pilihan, form.jawaban_uraian
     );
+    eprintln!(
+        "DEBUG ujian_submit: payload meta - konfirmasi={:?}, pilihan_len={}, jawaban_uraian_len={}",
+        form._konfirmasi,
+        form.pilihan.as_ref().map(|v| v.len()).unwrap_or(0),
+        form.jawaban_uraian.as_ref().map(|v| v.len()).unwrap_or(0)
+    );
 
     let Some(nis) = ctx.user.nis.clone() else {
         return Redirect::to("/siswa/ujian?message=Akun+siswa+belum+memiliki+NIS").into_response();
@@ -716,6 +726,12 @@ async fn finalize_submission(db: &MySqlPool, ujian_id: i64, nis: &str, peserta_i
     });
 
     eprintln!("DEBUG finalize_submission: ujian_meta={:?}", ujian_meta);
+    if let Some((_, None)) = ujian_meta {
+        eprintln!(
+            "WARN finalize_submission: ujian_meta.tahun is NULL - ujian_id={}, nis={}, peserta_id={}",
+            ujian_id, nis, peserta_id
+        );
+    }
 
     // If we have ujian metadata, compute totals directly from existing answers in ujian_jawabans
     if let Some((mata_pelajaran_id, Some(tahun))) = ujian_meta {
@@ -870,7 +886,7 @@ async fn finalize_submission(db: &MySqlPool, ujian_id: i64, nis: &str, peserta_i
         );
 
         // Update peserta status and total_nilai
-        let _ = sqlx::query(
+        let update_res = sqlx::query(
             r#"
             UPDATE ujian_pesertas
             SET status = 'submitted',
@@ -884,6 +900,12 @@ async fn finalize_submission(db: &MySqlPool, ujian_id: i64, nis: &str, peserta_i
         .bind(peserta_id)
         .execute(db)
         .await;
+        if let Err(e) = update_res {
+            eprintln!(
+                "ERROR finalize_submission: update ujian_pesertas failed peserta_id={}, err={:?}",
+                peserta_id, e
+            );
+        }
 
         eprintln!("DEBUG finalize_submission: akan insert/update hasil_nilais");
 
@@ -929,7 +951,7 @@ async fn finalize_submission(db: &MySqlPool, ujian_id: i64, nis: &str, peserta_i
     eprintln!("DEBUG finalize_submission: FALLBACK path - no ujian_meta");
 
     // Fallback: if no ujian meta, mark submitted and return 0
-    let _ = sqlx::query(
+    let update_res = sqlx::query(
         r#"
         UPDATE ujian_pesertas
         SET status = 'submitted',
@@ -942,6 +964,12 @@ async fn finalize_submission(db: &MySqlPool, ujian_id: i64, nis: &str, peserta_i
     .bind(peserta_id)
     .execute(db)
     .await;
+    if let Err(e) = update_res {
+        eprintln!(
+            "ERROR finalize_submission: fallback update ujian_pesertas failed peserta_id={}, err={:?}",
+            peserta_id, e
+        );
+    }
 
     0.0
 }
