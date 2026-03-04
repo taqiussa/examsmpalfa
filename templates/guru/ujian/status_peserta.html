@@ -1,0 +1,46 @@
+{% extends "layouts/app.html" %}
+
+{% block content %}
+<div class="card space-y-6">
+  <div>
+    <h1 class="text-xl font-semibold">Status Peserta</h1>
+    <p class="text-sm text-slate-500 mt-1">Pilih tahun dan ujian untuk melihat status pengerjaan peserta.</p>
+  </div>
+
+  {% if data.selected_ujian_id %}
+  {% set selected_id = data.selected_ujian_id %}
+  {% else %}
+  {% set selected_id = 0 %}
+  {% endif %}
+
+  <form id="status-peserta-filter" class="flex flex-wrap items-end gap-3"
+        method="get"
+        action="/status-peserta"
+        hx-get="/status-peserta/table"
+        hx-target="#status-peserta-table"
+        hx-swap="innerHTML"
+        hx-push-url="true"
+        hx-trigger="change from:select">
+    {% include "components/tahun.html" %}
+    <div class="flex-1 min-w-[240px]">
+      <label class="block text-sm text-slate-600 mb-1">Ujian (Mata Pelajaran)</label>
+      <select name="ujian_id" class="input">
+        <option value="">Pilih ujian...</option>
+        {% for u in data.list_ujian %}
+        <option value="{{ u.id }}" {% if u.id == selected_id %}selected{% endif %}>
+          {{ u.mata_pelajaran | default(value="-") }} - {{ u.title }}{% if u.is_active == 1 %} (Aktif){% endif %}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+  </form>
+
+  <div id="status-peserta-table"
+       hx-get="/status-peserta/table"
+       hx-include="#status-peserta-filter"
+       hx-trigger="load,refresh-status-peserta from:body"
+       hx-swap="innerHTML">
+    {% include "guru/ujian/_status_peserta_table.html" %}
+  </div>
+</div>
+{% endblock %}

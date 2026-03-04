@@ -16,6 +16,7 @@ use crate::{
             ujian_delete_token,
             ujian_uraian_review, ujian_uraian_score, ujian_uraian_table,
             nilai_kelas_mapel_page, nilai_kelas_mapel_table,
+            status_peserta_page, status_peserta_table, status_peserta_toggle,
         },
     },
     middlewares::role_middleware::{AllowedRoles, role_middleware},
@@ -35,6 +36,9 @@ pub fn guru_routes() -> Router {
         .route("/ujian/create", get(ujian_create))
         .route("/progress-ujian", get(ujian_progress))
         .route("/progress-ujian/active-panel", get(ujian_progress_active_panel))
+        .route("/status-peserta", get(status_peserta_page))
+        .route("/status-peserta/table", get(status_peserta_table))
+        .route("/status-peserta/{peserta_id}/toggle", post(status_peserta_toggle))
         .route("/review-uraian", get(ujian_uraian_review))
         .route("/review-uraian/table", get(ujian_uraian_table))
         .route("/review-uraian/score", post(ujian_uraian_score))

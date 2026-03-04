@@ -57,6 +57,12 @@ pub struct UraianFilter {
     pub tahun: Option<String>,
 }
 
+#[derive(Deserialize)]
+pub struct StatusPesertaFilter {
+    pub ujian_id: Option<i64>,
+    pub tahun: Option<String>,
+}
+
 #[derive(Deserialize, Clone)]
 pub struct NilaiFilter {
     #[serde(default, deserialize_with = "empty_string_as_none_i64")]
@@ -604,10 +610,12 @@ pub async fn ujian_show(
 mod nilai;
 mod progress;
 mod uraian;
+mod status_peserta;
 
 pub use nilai::{nilai_kelas_mapel_page, nilai_kelas_mapel_table};
 pub use progress::{ujian_progress, ujian_progress_active_panel};
 pub use uraian::{ujian_uraian_review, ujian_uraian_score, ujian_uraian_table};
+pub use status_peserta::{status_peserta_page, status_peserta_table, status_peserta_toggle};
 
 fn empty_string_as_none_i64<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
 where
