@@ -1,0 +1,25 @@
+services:
+  examsmkmifda:
+    image: taqiussa/examsmkmifda:latest
+
+    env_file:
+      - .env
+
+    networks:
+      - web
+
+    deploy:
+      replicas: 2
+
+      labels:
+        - "traefik.enable=true"
+        - "traefik.swarm.network=web"
+
+        - "traefik.http.routers.smkmifdaexam.rule=Host(`exam.smkmiftahulhudaperon.com`)"
+        - "traefik.http.routers.smkmifdaexam.entrypoints=web"
+
+        - "traefik.http.services.smkmifdaexam.loadbalancer.server.port=3000"
+
+networks:
+  web:
+    external: true
