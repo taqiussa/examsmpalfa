@@ -16,7 +16,8 @@ services:
         - "traefik.swarm.network=web"
 
         - "traefik.http.routers.smkmifdaexam.rule=Host(`exam.smkmiftahulhudaperon.com`)"
-        - "traefik.http.routers.smkmifdaexam.entrypoints=web"
+        - "traefik.http.routers.smkmifdaexam.entrypoints=websecure"
+        - "traefik.http.routers.smkmifdaexam.tls.certresolver=cloudflare"
 
         - "traefik.http.services.smkmifdaexam.loadbalancer.server.port=3000"
 
