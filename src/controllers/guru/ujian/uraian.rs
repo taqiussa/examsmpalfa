@@ -8,10 +8,12 @@ use serde::Serialize;
 use sqlx::MySqlPool;
 use tera::Context;
 
-use crate::utils::{page_context::PageContext, render::render, tahun::data_tahun};
+use crate::utils::{
+    list_kelas::list_kelas, page_context::PageContext, render::render, tahun::data_tahun,
+};
 
 use super::{
-    UjianOption, UraianFilter, UraianJawabanRow, UraianScoreForm, fetch_ujian_options, flash_error,
+    MapelOption, UraianFilter, UraianJawabanRow, UraianScoreForm, fetch_mapel_options, flash_error,
 };
 
 use crate::controllers::guru::absensi_kelas::Htmx;
@@ -19,8 +21,11 @@ use crate::controllers::guru::absensi_kelas::Htmx;
 #[derive(Serialize)]
 struct UraianReviewPageData {
     tahun: String,
-    list_ujian: Vec<UjianOption>,
-    selected_id: i64,
+    list_kelas: Vec<crate::utils::list_kelas::ListKelas>,
+    list_mapel: Vec<MapelOption>,
+    kelas_id: i64,
+    mata_pelajaran_id: i64,
+    require_kelas: bool,
 }
 
 pub async fn ujian_uraian_review(
@@ -29,13 +34,16 @@ pub async fn ujian_uraian_review(
     axum::Extension(db): axum::Extension<MySqlPool>,
 ) -> Html<String> {
     let tahun = filter.tahun.clone().unwrap_or_else(data_tahun);
-    let list_ujian = fetch_ujian_options(&db, &tahun).await;
-    let selected_id = filter.ujian_id.unwrap_or(0);
+    let list_kelas = list_kelas(&db).await.unwrap_or_default();
+    let list_mapel = fetch_mapel_options(&db).await;
 
     let data = UraianReviewPageData {
         tahun,
-        list_ujian,
-        selected_id,
+        list_kelas,
+        list_mapel,
+        kelas_id: filter.kelas_id.unwrap_or(0),
+        mata_pelajaran_id: filter.mata_pelajaran_id.unwrap_or(0),
+        require_kelas: false,
     };
 
     render(&ctx, "guru/ujian/uraian_review.html", "Review Uraian", data)
@@ -48,28 +56,28 @@ pub async fn ujian_uraian_table(
     axum::Extension(db): axum::Extension<MySqlPool>,
 ) -> axum::response::Response {
     if !is_htmx {
-        let url = match filter.ujian_id {
-            Some(id) => format!(
-                "/review-uraian?ujian_id={}&tahun={}",
-                id,
-                filter.tahun.clone().unwrap_or_else(data_tahun)
-            ),
-            None => format!(
-                "/review-uraian?tahun={}",
-                filter.tahun.clone().unwrap_or_else(data_tahun)
-            ),
-        };
+        let url = format!(
+            "/review-uraian?kelas_id={}&mata_pelajaran_id={}&tahun={}",
+            filter.kelas_id.unwrap_or(0),
+            filter.mata_pelajaran_id.unwrap_or(0),
+            filter.tahun.clone().unwrap_or_else(data_tahun)
+        );
         return Redirect::to(&url).into_response();
     }
 
+    let kelas_id = filter.kelas_id.unwrap_or(0);
+    let mata_pelajaran_id = filter.mata_pelajaran_id.unwrap_or(0);
+    let tahun = filter.tahun.clone().unwrap_or_else(data_tahun);
     let mut list: Vec<UraianJawabanRow> = Vec::new();
-    if let Some(ujian_id) = filter.ujian_id {
-        let tahun = filter.tahun.clone().unwrap_or_else(data_tahun);
+
+    if mata_pelajaran_id > 0 {
         let query = sqlx::query_as::<_, UraianJawabanRow>(
             r#"
             SELECT
                 j.id as jawaban_id,
                 j.ujian_id,
+                uj.title as ujian_title,
+                k.nama as kelas,
                 j.nis,
                 u.name as nama,
                 j.soal_id,
@@ -82,23 +90,32 @@ pub async fn ujian_uraian_table(
             JOIN soals s ON s.id = j.soal_id
             JOIN ujians uj ON uj.id = j.ujian_id
             LEFT JOIN users u ON u.nis = j.nis
-            WHERE j.ujian_id = ?
-              AND s.kategori = 'Uraian'
+            LEFT JOIN siswas sw ON sw.nis = j.nis AND sw.tahun = uj.tahun
+            LEFT JOIN kelas k ON k.id = sw.kelas_id
+            WHERE s.kategori = 'Uraian'
               AND uj.tahun = ?
+              AND uj.mata_pelajaran_id = ?
+              AND (? = 0 OR sw.kelas_id = ?)
             ORDER BY
                 CASE WHEN j.status_uraian IS NULL THEN 0 ELSE 1 END,
+                k.nama ASC,
+                uj.title ASC,
+                u.name IS NULL,
+                u.name ASC,
                 j.updated_at DESC
             "#,
         )
-        .bind(ujian_id)
-        .bind(&tahun);
+        .bind(&tahun)
+        .bind(mata_pelajaran_id)
+        .bind(kelas_id)
+        .bind(kelas_id);
 
         match query.fetch_all(&db).await {
             Ok(rows) => list = rows,
             Err(e) => {
                 eprintln!(
-                    "ERROR ujian_uraian_table: query failed ujian_id={}, tahun={}, err={:?}",
-                    ujian_id, tahun, e
+                    "ERROR ujian_uraian_table: query failed tahun={}, kelas_id={}, mata_pelajaran_id={}, err={:?}",
+                    tahun, kelas_id, mata_pelajaran_id, e
                 );
                 list = Vec::new();
             }
@@ -107,7 +124,8 @@ pub async fn ujian_uraian_table(
 
     let mut tera_ctx = Context::new();
     tera_ctx.insert("list_jawaban", &list);
-    tera_ctx.insert("selected_id", &filter.ujian_id.unwrap_or(0));
+    tera_ctx.insert("kelas_id", &kelas_id);
+    tera_ctx.insert("mata_pelajaran_id", &mata_pelajaran_id);
 
     let rendered = ctx
         .tera

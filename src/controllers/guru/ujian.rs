@@ -53,7 +53,10 @@ pub struct ProgressFilter {
 
 #[derive(Deserialize)]
 pub struct UraianFilter {
-    pub ujian_id: Option<i64>,
+    #[serde(default, deserialize_with = "empty_string_as_none_i64")]
+    pub kelas_id: Option<i64>,
+    #[serde(default, deserialize_with = "empty_string_as_none_i64")]
+    pub mata_pelajaran_id: Option<i64>,
     pub tahun: Option<String>,
 }
 
@@ -85,6 +88,8 @@ struct UjianOption {
 struct UraianJawabanRow {
     jawaban_id: i64,
     ujian_id: i64,
+    ujian_title: Option<String>,
+    kelas: Option<String>,
     nis: String,
     nama: Option<String>,
     soal_id: i64,

@@ -1,11 +1,12 @@
-{% if selected_id == 0 %}
-<div class="text-sm text-slate-500">Silakan pilih ujian terlebih dahulu.</div>
+{% if mata_pelajaran_id == 0 %}
+<div class="text-sm text-slate-500">Silakan pilih mata pelajaran terlebih dahulu.</div>
 {% else %}
 <div class="bg-white border border-slate-200 rounded-lg p-4">
         <div class="overflow-auto">
                 <table class="w-full text-sm border border-slate-200 rounded">
                         <thead class="bg-slate-100">
                                 <tr>
+                                        <th class="border px-2 py-1 text-left">Ujian</th>
                                         <th class="border px-2 py-1 text-left">Siswa</th>
                                         <th class="border px-2 py-1 text-left">Soal</th>
                                         <th class="border px-2 py-1 text-left">Jawaban</th>
@@ -17,6 +18,10 @@
                         <tbody>
                                 {% for j in list_jawaban %}
                                 <tr>
+                                        <td class="border px-2 py-1">
+                                                <div class="font-semibold">{{ j.ujian_title | default(value="-") }}</div>
+                                                <div class="text-xs text-slate-500">{{ j.kelas | default(value="Tanpa Kelas") }}</div>
+                                        </td>
                                         <td class="border px-2 py-1">
                                                 <div class="font-semibold">{{ j.nama | default(value="NIS " ~ j.nis) }}</div>
                                                 <div class="text-xs text-slate-500">{{ j.nis }}</div>
@@ -63,7 +68,7 @@
                                 </tr>
                                 {% else %}
                                 <tr>
-                                        <td colspan="6" class="border px-2 py-3 text-center text-slate-500">
+                                        <td colspan="7" class="border px-2 py-3 text-center text-slate-500">
                                                 Belum ada jawaban uraian.
                                         </td>
                                 </tr>
