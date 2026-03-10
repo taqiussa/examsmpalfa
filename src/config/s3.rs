@@ -1,5 +1,5 @@
-use aws_sdk_s3::{config::Builder as S3ConfigBuilder, Client};
 use aws_config::BehaviorVersion;
+use aws_sdk_s3::{Client, config::Builder as S3ConfigBuilder};
 use aws_types::region::Region;
 use std::env;
 
@@ -14,13 +14,14 @@ pub async fn build_from_env() -> Option<S3State> {
     let bucket = env::var("AWS_BUCKET").ok()?;
     let region_value = env::var("AWS_DEFAULT_REGION").unwrap_or_else(|_| "us-east-1".into());
     let endpoint = env::var("AWS_ENDPOINT").ok();
-    let public_base_url = env::var("AWS_URL").ok().or_else(|| {
-        endpoint
-            .as_ref()
-            .map(|e| format!("{}/{}", e.trim_end_matches('/'), bucket))
-    }).unwrap_or_else(|| {
-        format!("https://{}.s3.{}.amazonaws.com", bucket, region_value)
-    });
+    let public_base_url = env::var("AWS_URL")
+        .ok()
+        .or_else(|| {
+            endpoint
+                .as_ref()
+                .map(|e| format!("{}/{}", e.trim_end_matches('/'), bucket))
+        })
+        .unwrap_or_else(|| format!("https://{}.s3.{}.amazonaws.com", bucket, region_value));
 
     let region = Region::new(region_value);
     let mut config_loader = aws_config::defaults(BehaviorVersion::latest()).region(region.clone());

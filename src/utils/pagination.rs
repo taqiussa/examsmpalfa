@@ -43,7 +43,7 @@ pub fn build_pagination(page: i64, total_rows: i64) -> Pagination {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_pagination, PAGE_SIZE};
+    use super::{PAGE_SIZE, build_pagination};
 
     #[test]
     fn build_pagination_clamps_page_and_ranges() {

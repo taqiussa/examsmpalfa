@@ -79,17 +79,19 @@ fn redirect_login(req: &Request<Body>) -> Response {
 mod tests {
     use super::auth_middleware;
     use axum::{
+        Extension, Router,
         body::Body,
         http::{Request, StatusCode},
         middleware,
         response::IntoResponse,
         routing::get,
-        Extension, Router,
     };
     use serial_test::serial;
     use tower::ServiceExt;
 
-    async fn protected_handler(axum::Extension(user): Extension<crate::models::auth_user::AuthUser>) -> impl IntoResponse {
+    async fn protected_handler(
+        axum::Extension(user): Extension<crate::models::auth_user::AuthUser>,
+    ) -> impl IntoResponse {
         format!("hello {}", user.name)
     }
 
@@ -105,7 +107,12 @@ mod tests {
             .layer(middleware::from_fn(auth_middleware));
 
         let response = app
-            .oneshot(Request::builder().uri("/protected").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/protected")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
 

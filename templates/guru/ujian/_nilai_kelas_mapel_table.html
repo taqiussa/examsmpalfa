@@ -2,6 +2,16 @@
 <div class="text-sm text-slate-500">Silakan pilih kelas terlebih dahulu.</div>
 {% else %}
 <div class="bg-white border border-slate-200 rounded-lg p-4">
+        <div class="flex items-center justify-between gap-3 mb-4">
+                <div class="text-sm text-slate-500">
+                        Export akan mengikuti filter kelas, mata pelajaran, dan tahun yang sedang aktif.
+                </div>
+                <a href="/hasil-nilai/export?kelas_id={{ kelas_id }}&mata_pelajaran_id={{ mata_pelajaran_id }}&tahun={{ tahun | urlencode }}"
+                        data-loading="off"
+                        class="inline-flex items-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700">
+                        Export Excel
+                </a>
+        </div>
         <div class="overflow-auto">
                 <table class="w-full text-sm border border-slate-200 rounded">
                         <thead class="bg-slate-100">

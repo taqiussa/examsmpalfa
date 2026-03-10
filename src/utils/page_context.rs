@@ -68,7 +68,9 @@ mod tests {
         let result = PageContext::from_request_parts(&mut parts, &state).await;
         assert!(matches!(result, Err(StatusCode::INTERNAL_SERVER_ERROR)));
 
-        parts.extensions.insert(crate::test_support::build_test_tera());
+        parts
+            .extensions
+            .insert(crate::test_support::build_test_tera());
         let result = PageContext::from_request_parts(&mut parts, &state).await;
         assert!(result.is_ok());
     }

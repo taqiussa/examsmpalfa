@@ -19,12 +19,12 @@ pub async fn guest_middleware(jar: CookieJar, req: Request<Body>, next: Next) ->
 mod tests {
     use super::guest_middleware;
     use axum::{
+        Router,
         body::Body,
         http::{Request, StatusCode},
         middleware,
         response::IntoResponse,
         routing::get,
-        Router,
     };
     use tower::ServiceExt;
 
@@ -39,7 +39,12 @@ mod tests {
             .layer(middleware::from_fn(guest_middleware));
 
         let response = app
-            .oneshot(Request::builder().uri("/login").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/login")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
 

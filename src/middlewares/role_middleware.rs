@@ -46,15 +46,15 @@ pub async fn role_middleware(req: Request<Body>, next: Next) -> Response {
 
 #[cfg(test)]
 mod tests {
-    use super::{role_middleware, AllowedRoles};
+    use super::{AllowedRoles, role_middleware};
     use crate::models::{auth_user::AuthUser, role::Role};
     use axum::{
-        body::{to_bytes, Body},
+        Extension, Router,
+        body::{Body, to_bytes},
         http::{Request, StatusCode},
         middleware,
         response::IntoResponse,
         routing::get,
-        Extension, Router,
     };
     use tower::ServiceExt;
 
@@ -78,7 +78,12 @@ mod tests {
             .layer(Extension(AllowedRoles(vec![Role::Admin])));
 
         let response = app
-            .oneshot(Request::builder().uri("/admin").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/admin")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
 
@@ -101,7 +106,12 @@ mod tests {
             .layer(Extension(AllowedRoles(vec![Role::Admin])));
 
         let response = app
-            .oneshot(Request::builder().uri("/admin").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/admin")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
 

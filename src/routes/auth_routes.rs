@@ -1,4 +1,7 @@
-use axum::{Router, routing::{get, post}};
+use axum::{
+    Router,
+    routing::{get, post},
+};
 
 use crate::controllers::auth::{
     dashboard_page::dashboard_page, flash_action::flash_action, logout_action::logout_action,

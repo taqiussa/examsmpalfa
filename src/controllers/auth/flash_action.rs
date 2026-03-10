@@ -1,4 +1,4 @@
-use axum::{extract::Query, http::StatusCode, response::IntoResponse, Json};
+use axum::{Json, extract::Query, http::StatusCode, response::IntoResponse};
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -26,27 +26,23 @@ pub async fn flash_action(Query(params): Query<FlashParams>) -> impl IntoRespons
         _ => "success".to_string(),
     };
 
-    let message = params.message.unwrap_or_else(|| match status.as_str() {
-        "success" => "Sukses memunculkan flash",
-        "warning" => "Peringatan berhasil ditampilkan",
-        "error" => "Terjadi kesalahan saat memunculkan flash",
-        "info" => "Info berhasil ditampilkan",
-        _ => "Sukses memunculkan flash",
-    }
-    .to_string());
+    let message = params.message.unwrap_or_else(|| {
+        match status.as_str() {
+            "success" => "Sukses memunculkan flash",
+            "warning" => "Peringatan berhasil ditampilkan",
+            "error" => "Terjadi kesalahan saat memunculkan flash",
+            "info" => "Info berhasil ditampilkan",
+            _ => "Sukses memunculkan flash",
+        }
+        .to_string()
+    });
 
-    (
-        StatusCode::OK,
-        Json(FlashResponse {
-            status,
-            message,
-        }),
-    )
+    (StatusCode::OK, Json(FlashResponse { status, message }))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{flash_action, FlashParams};
+    use super::{FlashParams, flash_action};
     use axum::extract::Query;
     use axum::response::IntoResponse;
 

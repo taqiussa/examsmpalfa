@@ -33,9 +33,9 @@ pub fn web_routes() -> Router {
 mod tests {
     use super::web_routes;
     use axum::{
+        Extension, Router,
         body::Body,
         http::{Request, StatusCode},
-        Extension, Router,
     };
     use serial_test::serial;
     use tower::ServiceExt;
@@ -56,7 +56,12 @@ mod tests {
         let app = build_app(test_db.pool.clone());
 
         let response = app
-            .oneshot(Request::builder().uri("/login").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/login")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
@@ -73,7 +78,12 @@ mod tests {
         let app = build_app(test_db.pool.clone());
 
         let response = app
-            .oneshot(Request::builder().uri("/dashboard").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/dashboard")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::SEE_OTHER);

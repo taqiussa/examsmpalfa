@@ -80,9 +80,9 @@ pub async fn login_action(
 
 #[cfg(test)]
 mod tests {
-    use super::{login_action, LoginForm};
-    use axum::{Extension, Form};
+    use super::{LoginForm, login_action};
     use axum::response::IntoResponse;
+    use axum::{Extension, Form};
     use axum_extra::extract::cookie::CookieJar;
     use serial_test::serial;
 

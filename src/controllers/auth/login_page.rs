@@ -16,7 +16,7 @@ pub async fn login_page(Extension(tera): Extension<Tera>) -> Html<String> {
 #[cfg(test)]
 mod tests {
     use super::login_page;
-    use axum::{response::IntoResponse, Extension};
+    use axum::{Extension, response::IntoResponse};
 
     #[tokio::test]
     async fn login_page_renders() {

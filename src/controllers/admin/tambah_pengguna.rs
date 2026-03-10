@@ -244,16 +244,15 @@ async fn fetch_users(db: &MySqlPool) -> Vec<UserRow> {
 #[cfg(test)]
 mod tests {
     use super::{
-        hapus_pengguna_action, tambah_pengguna_action, HapusPenggunaForm, Htmx,
-        TambahPenggunaForm,
+        HapusPenggunaForm, Htmx, TambahPenggunaForm, hapus_pengguna_action, tambah_pengguna_action,
     };
     use crate::{
         models::{auth_user::AuthUser, role::Role},
         utils::page_context::PageContext,
     };
-    use axum::{Extension, Form};
     use axum::http::Uri;
     use axum::response::IntoResponse;
+    use axum::{Extension, Form};
     use serial_test::serial;
 
     fn base_ctx() -> PageContext {

@@ -158,18 +158,16 @@ pub async fn seed_base_data(pool: &MySqlPool) -> SeedData {
         .await
         .unwrap();
 
-    sqlx::query(
-        "INSERT INTO model_has_roles (role_id, model_id) VALUES (?, ?), (?, ?), (?, ?)",
-    )
-    .bind(role_admin_id)
-    .bind(admin_id)
-    .bind(role_guru_id)
-    .bind(guru_id)
-    .bind(role_siswa_id)
-    .bind(siswa_id)
-    .execute(&mut *tx)
-    .await
-    .unwrap();
+    sqlx::query("INSERT INTO model_has_roles (role_id, model_id) VALUES (?, ?), (?, ?), (?, ?)")
+        .bind(role_admin_id)
+        .bind(admin_id)
+        .bind(role_guru_id)
+        .bind(guru_id)
+        .bind(role_siswa_id)
+        .bind(siswa_id)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
 
     sqlx::query("INSERT INTO kelas (nama, tingkat) VALUES ('7A', 7)")
         .execute(&mut *tx)

@@ -59,7 +59,12 @@ pub async fn status_peserta_page(
         list_peserta: Vec::new(),
     };
 
-    render(&ctx, "guru/ujian/status_peserta.html", "Status Peserta", data)
+    render(
+        &ctx,
+        "guru/ujian/status_peserta.html",
+        "Status Peserta",
+        data,
+    )
 }
 
 pub async fn status_peserta_table(
@@ -187,7 +192,10 @@ pub async fn status_peserta_toggle(
             (headers, Html(String::new())).into_response()
         }
         Err(e) => {
-            eprintln!("ERROR status_peserta_toggle: peserta_id={}, err={:?}", peserta_id, e);
+            eprintln!(
+                "ERROR status_peserta_toggle: peserta_id={}, err={:?}",
+                peserta_id, e
+            );
             let mut headers = flash_error("Gagal mengubah status peserta.");
             let is_status_page = req_headers
                 .get("HX-Current-URL")

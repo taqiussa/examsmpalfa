@@ -448,23 +448,6 @@ pub async fn ujian_session_page(
     render(&ctx, "siswa/ujian/session.html", "Sesi Ujian", data).into_response()
 }
 
-#[derive(Debug, Deserialize)]
-pub struct JawabForm {
-    soal_id: i64,
-    // support either a single value or multiple checkbox values
-    pilihan: Option<OneOrMany>,
-    jawaban_uraian: Option<String>,
-    nomor_tujuan: Option<i32>,
-    nomor_saat_ini: i32,
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(untagged)]
-pub enum OneOrMany {
-    One(String),
-    Many(Vec<String>),
-}
-
 #[derive(FromRow)]
 struct SoalKunciRow {
     kunci_jawaban: Option<String>,

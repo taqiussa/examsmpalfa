@@ -97,14 +97,26 @@ mod tests {
     #[test]
     fn build_sidebar_for_admin_includes_admin_header() {
         let items = build_sidebar(&[Role::Admin], "/dashboard");
-        assert!(items.iter().any(|i| i.kind == "header" && i.label == "Admin"));
+        assert!(
+            items
+                .iter()
+                .any(|i| i.kind == "header" && i.label == "Admin")
+        );
         assert!(items.iter().any(|i| i.href == "/dashboard" && i.active));
     }
 
     #[test]
     fn build_sidebar_for_siswa_only_has_siswa_section() {
         let items = build_sidebar(&[Role::Siswa], "/siswa");
-        assert!(items.iter().any(|i| i.kind == "header" && i.label == "Siswa"));
-        assert!(!items.iter().any(|i| i.kind == "header" && i.label == "Admin"));
+        assert!(
+            items
+                .iter()
+                .any(|i| i.kind == "header" && i.label == "Siswa")
+        );
+        assert!(
+            !items
+                .iter()
+                .any(|i| i.kind == "header" && i.label == "Admin")
+        );
     }
 }
