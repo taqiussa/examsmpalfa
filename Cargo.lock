@@ -1087,7 +1087,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "examsmkmifda"
+name = "examsmpalfa"
 version = "1.0.0"
 dependencies = [
  "aws-config",

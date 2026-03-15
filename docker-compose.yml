@@ -1,10 +1,10 @@
 services:
   app:
-    image: taqiussa/examsmkmifda:latest
+    image: taqiussa/examsmpalfa:latest
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: examsmkmifda
+    container_name: examsmpalfa
     restart: unless-stopped
     env_file:
       - .env.docker

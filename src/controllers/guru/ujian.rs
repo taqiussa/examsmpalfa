@@ -1314,7 +1314,7 @@ pub async fn soal_image_upload(
         .unwrap_or("misc")
         .replace(|c: char| !c.is_ascii_alphanumeric(), "_");
     let key = format!(
-        "smkmifda/ujian/{}/{}/{}.{}",
+        "smpalfa/ujian/{}/{}/{}.{}",
         ujian_id,
         folder,
         Uuid::new_v4(),

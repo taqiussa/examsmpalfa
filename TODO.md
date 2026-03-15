@@ -51,9 +51,9 @@
 ## 8. Testing - NEXT STEPS
 - [x] Jalankan migration di database - **Need to run manually when MySQL is available**
   ```bash
-  mysql -u root -p sikadusmkmifda < migrations/20240101000001_create_ujians_tables.sql
+  mysql -u root -p siakadsmpalfa < migrations/20240101000001_create_ujians_tables.sql
   # OR
-  mariadb -u root sikadusmkmifda < migrations/20240101000001_create_ujians_tables.sql
+  mariadb -u root siakadsmpalfa < migrations/20240101000001_create_ujians_tables.sql
   ```
 - [x] Build project: `cargo check` - **PASSED** (code compiles, only DB errors for missing tables)
 - [ ] Test routes dengan curl/HTMX

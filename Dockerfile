@@ -51,10 +51,10 @@ COPY templates/ ./templates/
 COPY migrations/ ./migrations/
 COPY .sqlx/ ./.sqlx/
 
-RUN rm -f /app/target/release/examsmkmifda \
+RUN rm -f /app/target/release/examsmpalfa \
     && find src -type f -exec touch {} + \
     && cargo build --release --locked \
-    && strip /app/target/release/examsmkmifda
+    && strip /app/target/release/examsmpalfa
 
 
 # =========================
@@ -71,7 +71,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && rm -rf /var/lib/apt/lists/*
 
 # app binary
-COPY --from=rust_builder /app/target/release/examsmkmifda /app/app
+COPY --from=rust_builder /app/target/release/examsmpalfa /app/app
 
 # sqlx cli
 COPY --from=rust_builder /usr/local/cargo/bin/sqlx /usr/local/bin/sqlx
