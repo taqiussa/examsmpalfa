@@ -5,10 +5,22 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
 };
 use axum_extra::extract::cookie::CookieJar;
-use sqlx::MySqlPool;
+use sqlx::{FromRow, MySqlPool};
 
 use crate::models::auth_user::AuthUser;
 use crate::models::role::Role;
+
+#[derive(FromRow)]
+struct RoleRow {
+    name: String,
+}
+
+#[derive(FromRow)]
+struct AuthMiddlewareUserRow {
+    name: String,
+    foto: Option<String>,
+    nis: Option<String>,
+}
 
 pub async fn auth_middleware(jar: CookieJar, mut req: Request<Body>, next: Next) -> Response {
     // 1️⃣ cek cookie login
@@ -27,15 +39,15 @@ pub async fn auth_middleware(jar: CookieJar, mut req: Request<Body>, next: Next)
         .expect("MySqlPool missing");
 
     // 3️⃣ ambil semua role dari Spatie tables
-    let roles: Vec<Role> = match sqlx::query!(
+    let roles: Vec<Role> = match sqlx::query_as::<_, RoleRow>(
         r#"
         SELECT r.name
         FROM roles r
         JOIN model_has_roles mhr ON mhr.role_id = r.id
         WHERE mhr.model_id = ?
         "#,
-        user_id
     )
+    .bind(user_id)
     .fetch_all(pool)
     .await
     {
@@ -46,9 +58,12 @@ pub async fn auth_middleware(jar: CookieJar, mut req: Request<Body>, next: Next)
     };
 
     // 4️⃣ ambil data user
-    let user = match sqlx::query!("SELECT name, foto, nis FROM users WHERE id = ?", user_id)
-        .fetch_one(pool)
-        .await
+    let user = match sqlx::query_as::<_, AuthMiddlewareUserRow>(
+        "SELECT name, foto, CAST(nis AS CHAR) AS nis FROM users WHERE id = ?",
+    )
+    .bind(user_id)
+    .fetch_one(pool)
+    .await
     {
         Ok(u) => u,
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "User not found").into_response(),

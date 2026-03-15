@@ -193,8 +193,19 @@ pub async fn seed_base_data(pool: &MySqlPool) -> SeedData {
 
     sqlx::query(
         r#"
-        INSERT INTO biodatas (nis, tempat_lahir, tanggal_lahir, nama_ayah, nama_ibu, alamat, telepon)
-        VALUES (?, 'Bandung', '2010-01-01', 'Ayah', 'Ibu', 'Jalan Mawar', '081234')
+        INSERT INTO biodatas (nis, tempat_lahir, tanggal_lahir, alamat_lengkap, telepon)
+        VALUES (?, 'Bandung', '2010-01-01', 'Jalan Mawar', '081234')
+        "#,
+    )
+    .bind(&nis)
+    .execute(&mut *tx)
+    .await
+    .unwrap();
+
+    sqlx::query(
+        r#"
+        INSERT INTO orang_tuas (nis, nama_ayah, nama_ibu)
+        VALUES (?, 'Ayah', 'Ibu')
         "#,
     )
     .bind(&nis)
@@ -253,10 +264,14 @@ async fn init_schema(pool: &MySqlPool) {
             nis VARCHAR(50) PRIMARY KEY,
             tempat_lahir VARCHAR(100),
             tanggal_lahir DATE,
-            nama_ayah VARCHAR(100),
-            nama_ibu VARCHAR(100),
-            alamat VARCHAR(255),
+            alamat_lengkap VARCHAR(255),
             telepon VARCHAR(50)
+        );
+
+        CREATE TABLE orang_tuas (
+            nis VARCHAR(50) PRIMARY KEY,
+            nama_ayah VARCHAR(100),
+            nama_ibu VARCHAR(100)
         );
 
         CREATE TABLE absensis (

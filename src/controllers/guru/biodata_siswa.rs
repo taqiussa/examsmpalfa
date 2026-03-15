@@ -5,7 +5,7 @@ use axum::{
     response::{Html, IntoResponse, Redirect},
 };
 use serde::{Deserialize, Serialize};
-use sqlx::MySqlPool;
+use sqlx::{FromRow, MySqlPool};
 use tera::Context;
 
 use crate::utils::{
@@ -31,7 +31,7 @@ pub struct BiodataFilter {
     pub search: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, FromRow)]
 struct SiswaRow {
     nis: Option<String>,
     nama: Option<String>,
@@ -106,7 +106,7 @@ pub async fn biodata_siswa_table(
     let search_like = format!("%{}%", search);
 
     let total: i64 = if kelas_id == 0 {
-        sqlx::query_scalar!(
+        sqlx::query_scalar::<_, i64>(
             r#"
             SELECT COUNT(*)
             FROM siswas s
@@ -114,14 +114,14 @@ pub async fn biodata_siswa_table(
             WHERE s.tahun = ?
               AND u.name LIKE ?
             "#,
-            tahun,
-            search_like
         )
+        .bind(&tahun)
+        .bind(&search_like)
         .fetch_one(&db)
         .await
         .unwrap_or(0)
     } else {
-        sqlx::query_scalar!(
+        sqlx::query_scalar::<_, i64>(
             r#"
             SELECT COUNT(*)
             FROM siswas s
@@ -130,10 +130,10 @@ pub async fn biodata_siswa_table(
               AND s.kelas_id = ?
               AND u.name LIKE ?
             "#,
-            tahun,
-            kelas_id,
-            search_like
         )
+        .bind(&tahun)
+        .bind(kelas_id)
+        .bind(&search_like)
         .fetch_one(&db)
         .await
         .unwrap_or(0)
@@ -143,68 +143,68 @@ pub async fn biodata_siswa_table(
     let offset = (pagination.page - 1) * PAGE_SIZE;
 
     let rows: Vec<SiswaRow> = if kelas_id == 0 {
-        sqlx::query_as!(
-            SiswaRow,
+        sqlx::query_as::<_, SiswaRow>(
             r#"
             SELECT 
-                s.nis,
-                u.name AS nama,
-                k.nama AS kelas,
-                s.tingkat,
-                b.tempat_lahir,
+                CAST(s.nis AS CHAR) AS nis,
+                CAST(u.name AS CHAR) AS nama,
+                CAST(k.nama AS CHAR) AS kelas,
+                CAST(s.tingkat AS CHAR) AS tingkat,
+                CAST(b.tempat_lahir AS CHAR) AS tempat_lahir,
                 DATE_FORMAT(b.tanggal_lahir, '%Y-%m-%d') AS tanggal_lahir,
-                b.nama_ayah,
-                b.nama_ibu,
-                b.alamat_lengkap,
-                b.telepon
+                CAST(ot.nama_ayah AS CHAR) AS nama_ayah,
+                CAST(ot.nama_ibu AS CHAR) AS nama_ibu,
+                CAST(b.alamat_lengkap AS CHAR) AS alamat_lengkap,
+                CAST(b.telepon AS CHAR) AS telepon
             FROM siswas s
             JOIN kelas k ON k.id = s.kelas_id
             JOIN users u ON u.nis = s.nis
             LEFT JOIN biodatas b ON b.nis = s.nis
+            LEFT JOIN orang_tuas ot ON ot.nis = s.nis
             WHERE s.tahun = ?
               AND u.name LIKE ?
             ORDER BY k.tingkat, k.nama, u.name
             LIMIT ? OFFSET ?
             "#,
-            tahun,
-            search_like,
-            PAGE_SIZE,
-            offset
         )
+        .bind(&tahun)
+        .bind(&search_like)
+        .bind(PAGE_SIZE)
+        .bind(offset)
         .fetch_all(&db)
         .await
         .unwrap_or_default()
     } else {
-        sqlx::query_as!(
-            SiswaRow,
+        sqlx::query_as::<_, SiswaRow>(
             r#"
             SELECT 
-                s.nis,
-                u.name AS nama,
-                k.nama AS kelas,
-                s.tingkat,
-                b.tempat_lahir,
+                CAST(s.nis AS CHAR) AS nis,
+                CAST(u.name AS CHAR) AS nama,
+                CAST(k.nama AS CHAR) AS kelas,
+                CAST(s.tingkat AS CHAR) AS tingkat,
+                CAST(b.tempat_lahir AS CHAR) AS tempat_lahir,
                 DATE_FORMAT(b.tanggal_lahir, '%Y-%m-%d') AS tanggal_lahir,
-                b.nama_ayah,
-                b.nama_ibu,
-                b.alamat_lengkap,
-                b.telepon
+                CAST(ot.nama_ayah AS CHAR) AS nama_ayah,
+                CAST(ot.nama_ibu AS CHAR) AS nama_ibu,
+                CAST(b.alamat_lengkap AS CHAR) AS alamat_lengkap,
+                CAST(b.telepon AS CHAR) AS telepon
             FROM siswas s
             JOIN kelas k ON k.id = s.kelas_id
             JOIN users u ON u.nis = s.nis
             LEFT JOIN biodatas b ON b.nis = s.nis
+            LEFT JOIN orang_tuas ot ON ot.nis = s.nis
             WHERE s.tahun = ?
               AND s.kelas_id = ?
               AND u.name LIKE ?
             ORDER BY k.tingkat, k.nama, u.name
             LIMIT ? OFFSET ?
             "#,
-            tahun,
-            kelas_id,
-            search_like,
-            PAGE_SIZE,
-            offset
         )
+        .bind(&tahun)
+        .bind(kelas_id)
+        .bind(&search_like)
+        .bind(PAGE_SIZE)
+        .bind(offset)
         .fetch_all(&db)
         .await
         .unwrap_or_default()

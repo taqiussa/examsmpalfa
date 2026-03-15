@@ -1,5 +1,6 @@
 [alias]
 # Run FE + BE together from repo root
 # Usage: cargo dev
-# (We avoid aliasing `watch` to not conflict with cargo-watch)
-dev = "run --bin watch"
+# This points to a tiny helper crate so starting dev mode does not compile
+# the full backend before the watcher even begins.
+dev = "run --manifest-path xtask/Cargo.toml"

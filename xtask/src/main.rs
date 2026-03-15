@@ -41,7 +41,6 @@ fn main() -> std::io::Result<()> {
 
     eprintln!("[watch] {who} exited with {status}");
 
-    // Ensure the other process is stopped.
     match who {
         "backend" => {
             let _ = fe.kill();

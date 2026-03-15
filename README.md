@@ -64,8 +64,8 @@ CREATE DATABASE databasename CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```bash
 # Jalankan FE + BE dari root
 cargo dev
-# atau
-cargo run --bin watch
+# atau, jika ingin menjalankan helper-nya langsung
+cargo run --manifest-path xtask/Cargo.toml
 ```
 
 > Pastikan `cargo-watch` sudah ter-install dan dependencies FE sudah di-install.

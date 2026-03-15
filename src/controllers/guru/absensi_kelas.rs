@@ -6,7 +6,7 @@ use axum::{
 };
 use chrono::Local;
 use serde::{Deserialize, Serialize};
-use sqlx::MySqlPool;
+use sqlx::{FromRow, MySqlPool};
 use tera::Context;
 
 use crate::utils::{
@@ -36,7 +36,7 @@ pub struct AbsensiFilter {
     pub jam: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, FromRow)]
 struct AbsensiRow {
     nis: Option<String>,
     nama: Option<String>,
@@ -121,7 +121,7 @@ pub async fn absensi_kelas_mark_all(
         return Html(rendered).into_response();
     }
 
-    let _ = sqlx::query!(
+    let _ = sqlx::query(
         r#"
         INSERT INTO absensis (tanggal, tahun, semester, jam, kelas_id, nis, kehadiran_id, user_id, created_at, updated_at)
         SELECT ?, ?, ?, ?, s.kelas_id, s.nis, 1, ?, NOW(), NOW()
@@ -137,20 +137,20 @@ pub async fn absensi_kelas_mark_all(
               AND a.tanggal = ?
               AND a.jam = ?
           )
-        "#,
-        tanggal,
-        tahun,
-        semester,
-        jam,
-        ctx.user.id as i64,
-        tahun,
-        kelas_id,
-        kelas_id,
-        tahun,
-        semester,
-        tanggal,
-        jam
+        "#
     )
+    .bind(&tanggal)
+    .bind(&tahun)
+    .bind(semester)
+    .bind(&jam)
+    .bind(ctx.user.id as i64)
+    .bind(&tahun)
+    .bind(kelas_id)
+    .bind(kelas_id)
+    .bind(&tahun)
+    .bind(semester)
+    .bind(&tanggal)
+    .bind(&jam)
     .execute(&db)
     .await;
 
@@ -188,31 +188,31 @@ pub async fn absensi_kelas_update(
     }
 
     if let Some(absensi_id) = payload.absensi_id.filter(|id| *id > 0) {
-        let _ = sqlx::query!(
+        let _ = sqlx::query(
             r#"
             UPDATE absensis
             SET kehadiran_id = ?, updated_at = NOW()
             WHERE id = ?
             "#,
-            payload.kehadiran_id,
-            absensi_id
         )
+        .bind(payload.kehadiran_id)
+        .bind(absensi_id)
         .execute(&db)
         .await;
     } else {
-        let _ = sqlx::query!(
+        let _ = sqlx::query(
             r#"
             INSERT INTO absensis (tanggal, tahun, semester, jam, kelas_id, nis, kehadiran_id, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
-            "#,
-            payload.tanggal,
-            payload.tahun,
-            payload.semester,
-            payload.jam,
-            payload.kelas_id,
-            payload.nis,
-            payload.kehadiran_id
+            "#
         )
+        .bind(&payload.tanggal)
+        .bind(&payload.tahun)
+        .bind(payload.semester)
+        .bind(&payload.jam)
+        .bind(payload.kelas_id)
+        .bind(&payload.nis)
+        .bind(payload.kehadiran_id)
         .execute(&db)
         .await;
     }
@@ -270,16 +270,15 @@ async fn render_table(
             .unwrap();
     }
 
-    let rows: Vec<AbsensiRow> = sqlx::query_as!(
-        AbsensiRow,
+    let rows: Vec<AbsensiRow> = sqlx::query_as::<_, AbsensiRow>(
         r#"
         SELECT 
-            s.nis,
-            u.name AS nama,
-            k.nama AS kelas,
+            CAST(s.nis AS CHAR) AS nis,
+            CAST(u.name AS CHAR) AS nama,
+            CAST(k.nama AS CHAR) AS kelas,
             CAST(a.kehadiran_id AS SIGNED) AS kehadiran_id,
             CAST(a.id AS SIGNED) AS absensi_id,
-            g.name AS guru_nama
+            CAST(g.name AS CHAR) AS guru_nama
         FROM siswas s
         JOIN users u ON u.nis = s.nis
         JOIN kelas k ON k.id = s.kelas_id
@@ -295,13 +294,13 @@ async fn render_table(
           AND s.kelas_id = ?
         ORDER BY u.name
         "#,
-        tahun,
-        semester,
-        tanggal,
-        jam,
-        tahun,
-        kelas_id
     )
+    .bind(tahun)
+    .bind(semester)
+    .bind(tanggal)
+    .bind(jam)
+    .bind(tahun)
+    .bind(kelas_id)
     .fetch_all(db)
     .await
     .unwrap_or_default();
