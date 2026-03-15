@@ -1,4 +1,5 @@
 -- Migration: add indexes and optional FK for hasil_nilais.nis -> users.nis
+-- Note: the FK is only added when both columns are structurally compatible.
 
 -- Ensure helpful composite indexes on hasil_nilais
 SET @idx1 := (
@@ -49,7 +50,9 @@ SET @sql3 := IF(@users_tbl = 1 AND @users_nis_idx = 0,
 );
 PREPARE stmt3 FROM @sql3; EXECUTE stmt3; DEALLOCATE PREPARE stmt3;
 
--- Add FK hasil_nilais.nis -> users.nis if possible
+-- Add FK hasil_nilais.nis -> users.nis only when the schemas match.
+-- MySQL rejects the FK when VARCHAR length/collation differs, which can happen
+-- because users.nis is managed outside this migration set in some deployments.
 SET @fk_exists := (
     SELECT COUNT(1)
     FROM information_schema.table_constraints
@@ -59,7 +62,22 @@ SET @fk_exists := (
       AND constraint_type = 'FOREIGN KEY'
 );
 
-SET @sql4 := IF(@users_tbl = 1 AND @fk_exists = 0,
+SET @compatible_nis_columns := (
+    SELECT COUNT(1)
+    FROM information_schema.columns hn
+    JOIN information_schema.columns un
+      ON un.table_schema = hn.table_schema
+     AND un.table_name = 'users'
+     AND un.column_name = 'nis'
+    WHERE hn.table_schema = DATABASE()
+      AND hn.table_name = 'hasil_nilais'
+      AND hn.column_name = 'nis'
+      AND hn.column_type = un.column_type
+      AND COALESCE(hn.character_set_name, '') = COALESCE(un.character_set_name, '')
+      AND COALESCE(hn.collation_name, '') = COALESCE(un.collation_name, '')
+);
+
+SET @sql4 := IF(@users_tbl = 1 AND @fk_exists = 0 AND @compatible_nis_columns = 1,
     'ALTER TABLE hasil_nilais ADD CONSTRAINT fk_hasil_nilais_users FOREIGN KEY (nis) REFERENCES users(nis) ON DELETE RESTRICT',
     'SELECT 1'
 );
