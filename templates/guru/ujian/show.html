@@ -113,7 +113,7 @@
           </div>
           {% elif s.kategori == "Pilihan Ganda Kompleks MCMA" %}
           <div class="space-y-3">
-            <div class="text-xs text-slate-500">Pilih tepat 2 pernyataan yang benar.</div>
+            <div class="text-xs text-slate-500">Pilih semua pernyataan yang benar. Minimal 1, bisa sampai 4.</div>
             {% if s.opsi_a %}
             <div class="flex items-center gap-2 rounded-md border border-slate-200 p-3">
               <span class="w-6 h-6 rounded flex items-center justify-center text-xs font-medium {% if s.kunci_jawaban and ('a' in s.kunci_jawaban) %} bg-emerald-400 text-white {% else %} bg-slate-200 {% endif %}">1</span>
@@ -130,6 +130,12 @@
             <div class="flex items-center gap-2 rounded-md border border-slate-200 p-3">
               <span class="w-6 h-6 rounded flex items-center justify-center text-xs font-medium {% if s.kunci_jawaban and ('c' in s.kunci_jawaban) %} bg-emerald-400 text-white {% else %} bg-slate-200 {% endif %}">3</span>
               <span>{{ s.opsi_c | safe }}</span>
+            </div>
+            {% endif %}
+            {% if s.opsi_d %}
+            <div class="flex items-center gap-2 rounded-md border border-slate-200 p-3">
+              <span class="w-6 h-6 rounded flex items-center justify-center text-xs font-medium {% if s.kunci_jawaban and ('d' in s.kunci_jawaban) %} bg-emerald-400 text-white {% else %} bg-slate-200 {% endif %}">4</span>
+              <span>{{ s.opsi_d | safe }}</span>
             </div>
             {% endif %}
             <div class="text-xs text-slate-500">Kunci: {{ s.kunci_jawaban | default(value='-') }}</div>

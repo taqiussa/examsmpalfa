@@ -7,10 +7,10 @@ services:
       - .env
     pull_policy: ${PULL_POLICY:-always}
     networks:
-      - proxy_network
+      - web
     ports:
       - "8830:${APP_PORT}"
 
 networks:
-  proxy_network:
+  web:
     external: true

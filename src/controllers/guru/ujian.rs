@@ -1049,7 +1049,7 @@ pub async fn soal_store(
         .unwrap_or("Pilihan Ganda");
 
     if kategori != "Uraian" {
-        if kategori == "Benar/Salah" || kategori == "Pilihan Ganda Kompleks MCMA" {
+        if kategori == "Benar/Salah" {
             if !has_visible_content(&form.opsi_a)
                 || !has_visible_content(&form.opsi_b)
                 || !has_visible_content(&form.opsi_c)
@@ -1116,18 +1116,35 @@ pub async fn soal_store(
                 .map(|s| s.trim().to_lowercase())
                 .filter(|s| !s.is_empty())
                 .collect();
-            if parts.len() != 2 {
+            if parts.is_empty() {
                 let mut headers = flash_error(
-                    "Kunci Pilihan Ganda Kompleks MCMA harus berisi tepat 2 pernyataan benar.",
+                    "Kunci Pilihan Ganda Kompleks MCMA harus berisi minimal 1 pernyataan benar.",
                 );
                 headers.insert("HX-Retarget", "#soal-form-container".parse().unwrap());
                 headers.insert("HX-Reswap", "none".parse().unwrap());
                 return (headers, Html(String::new())).into_response();
             }
+            if parts.len() > 4 {
+                let mut headers = flash_error(
+                    "Kunci Pilihan Ganda Kompleks MCMA maksimal berisi 4 pernyataan benar.",
+                );
+                headers.insert("HX-Retarget", "#soal-form-container".parse().unwrap());
+                headers.insert("HX-Reswap", "none".parse().unwrap());
+                return (headers, Html(String::new())).into_response();
+            }
+            let mut seen = std::collections::HashSet::new();
             for p in &parts {
-                if !matches!(p.as_str(), "a" | "b" | "c") {
+                if !matches!(p.as_str(), "a" | "b" | "c" | "d") {
                     let mut headers = flash_error(
-                        "Kunci Pilihan Ganda Kompleks MCMA hanya boleh memakai A, B, atau C.",
+                        "Kunci Pilihan Ganda Kompleks MCMA hanya boleh memakai A, B, C, atau D.",
+                    );
+                    headers.insert("HX-Retarget", "#soal-form-container".parse().unwrap());
+                    headers.insert("HX-Reswap", "none".parse().unwrap());
+                    return (headers, Html(String::new())).into_response();
+                }
+                if !seen.insert(p.clone()) {
+                    let mut headers = flash_error(
+                        "Kunci Pilihan Ganda Kompleks MCMA tidak boleh berisi pernyataan yang sama dua kali.",
                     );
                     headers.insert("HX-Retarget", "#soal-form-container".parse().unwrap());
                     headers.insert("HX-Reswap", "none".parse().unwrap());
@@ -1180,7 +1197,7 @@ pub async fn soal_store(
             form.opsi_a.clone(),
             form.opsi_b.clone(),
             form.opsi_c.clone(),
-            if kategori == "Benar/Salah" || kategori == "Pilihan Ganda Kompleks MCMA" {
+            if kategori == "Benar/Salah" {
                 String::new()
             } else {
                 form.opsi_d.clone()

@@ -72,7 +72,7 @@
       <div class="text-xs text-rose-600">Pilih tepat 2 jawaban.</div>
       {% elif data.current.kategori == "Pilihan Ganda Kompleks MCMA" %}
       <div class="space-y-3">
-        <div class="text-xs text-slate-600">Centang tepat 2 pernyataan yang benar.</div>
+        <div class="text-xs text-slate-600">Centang semua pernyataan yang benar. Minimal pilih 1 pernyataan.</div>
         <div class="grid grid-cols-1 gap-3">
           <label class="rounded-md border border-slate-200 p-3 hover:bg-slate-50 cursor-pointer">
             <input type="checkbox" name="pilihan" value="a" {% if data.current.jawaban_terpilih and 'a' in data.current.jawaban_terpilih %}checked{% endif %}>
@@ -89,9 +89,14 @@
             <span class="ml-2 font-semibold">Pernyataan 3.</span>
             <span>{{ data.current.opsi_c | safe }}</span>
           </label>
+          <label class="rounded-md border border-slate-200 p-3 hover:bg-slate-50 cursor-pointer">
+            <input type="checkbox" name="pilihan" value="d" {% if data.current.jawaban_terpilih and 'd' in data.current.jawaban_terpilih %}checked{% endif %}>
+            <span class="ml-2 font-semibold">Pernyataan 4.</span>
+            <span>{{ data.current.opsi_d | safe }}</span>
+          </label>
         </div>
       </div>
-      <div class="text-xs text-rose-600">Pilih tepat 2 pernyataan.</div>
+      <div class="text-xs text-rose-600">Pilih minimal 1 pernyataan yang benar.</div>
       {% elif data.current.kategori == "Benar/Salah" %}
       <div class="space-y-3">
         {% for item in data.current.pernyataan_bs %}
@@ -181,8 +186,11 @@
       const kategori = '{{ data.current.kategori | default(value="") }}';
       if (kategori === 'Pilihan Ganda Kompleks' || kategori === 'Pilihan Ganda Kompleks MCMA') {
         const checkedBoxes = Array.from(jawabanForm.querySelectorAll('input[type="checkbox"][name="pilihan"]:checked'));
-        if (checkedBoxes.length !== 2) {
-          return { error: kategori === 'Pilihan Ganda Kompleks MCMA' ? 'Pilih tepat 2 pernyataan.' : 'Pilih tepat 2 jawaban.' };
+        if (kategori === 'Pilihan Ganda Kompleks' && checkedBoxes.length !== 2) {
+          return { error: 'Pilih tepat 2 jawaban.' };
+        }
+        if (kategori === 'Pilihan Ganda Kompleks MCMA' && checkedBoxes.length < 1) {
+          return { error: 'Pilih minimal 1 pernyataan.' };
         }
         return { value: checkedBoxes.map(function (box) { return box.value; }).join(',') };
       }

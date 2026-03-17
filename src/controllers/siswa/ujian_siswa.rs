@@ -1292,11 +1292,12 @@ async fn simpan_jawaban_opsional(
             .map(|s| s.trim().to_lowercase())
             .filter(|s| !s.is_empty())
             .collect();
-        if selected.len() != 2 {
+        if selected.is_empty() || selected.len() > 4 {
             return;
         }
+        let mut selected_unique = std::collections::HashSet::new();
         for s in &selected {
-            if !matches!(s.as_str(), "a" | "b" | "c") {
+            if !matches!(s.as_str(), "a" | "b" | "c" | "d") || !selected_unique.insert(s.clone()) {
                 return;
             }
         }
@@ -1309,16 +1310,28 @@ async fn simpan_jawaban_opsional(
             .map(|s| s.trim().to_lowercase())
             .filter(|s| !s.is_empty())
             .collect();
-        if correct.len() != 2 {
+        if correct.is_empty() || correct.len() > 4 {
+            return;
+        }
+        let correct_set: std::collections::HashSet<&str> =
+            correct.iter().map(|item| item.as_str()).collect();
+        if correct_set.len() != correct.len()
+            || !correct_set
+                .iter()
+                .all(|item| matches!(*item, "a" | "b" | "c" | "d"))
+        {
             return;
         }
 
-        let matches = selected
+        let selected_set: std::collections::HashSet<&str> =
+            selected.iter().map(|item| item.as_str()).collect();
+        let matched_correct_count = correct
             .iter()
-            .filter(|choice| correct.iter().any(|answer| answer == *choice))
+            .filter(|key| selected_set.contains(key.as_str()))
             .count();
-        let nilai = (std::cmp::min(matches, 2) as f64 / 2.0) * k.bobot_nilai;
-        let is_benar = matches == 2;
+        let total_correct = correct.len() as f64;
+        let nilai = (matched_correct_count as f64 / total_correct) * k.bobot_nilai;
+        let is_benar = selected_set.len() == correct_set.len() && selected_set == correct_set;
         let pilihan_store = selected.join(",");
 
         let res = sqlx::query(

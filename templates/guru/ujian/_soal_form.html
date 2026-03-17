@@ -298,7 +298,7 @@
         document.getElementById('label-opsi-a').textContent = 'Pernyataan 1';
         document.getElementById('label-opsi-b').textContent = 'Pernyataan 2';
         document.getElementById('label-opsi-c').textContent = 'Pernyataan 3';
-        document.getElementById('label-opsi-d').textContent = 'Tidak digunakan';
+        document.getElementById('label-opsi-d').textContent = isTf ? 'Tidak digunakan' : 'Pernyataan 4';
       } else {
         document.getElementById('label-opsi-a').textContent = 'Opsi A';
         document.getElementById('label-opsi-b').textContent = 'Opsi B';
@@ -330,18 +330,18 @@
         kunciKompleks.classList.toggle('hidden', kategori !== 'Pilihan Ganda Kompleks' && kategori !== 'Pilihan Ganda Kompleks MCMA');
         kunciTF.classList.toggle('hidden', kategori !== 'Benar/Salah');
         if (opsiDWrapper) {
-          opsiDWrapper.classList.toggle('hidden', kategori === 'Benar/Salah' || kategori === 'Pilihan Ganda Kompleks MCMA');
+          opsiDWrapper.classList.toggle('hidden', kategori === 'Benar/Salah');
         }
-        if (opsiDInput && (kategori === 'Benar/Salah' || kategori === 'Pilihan Ganda Kompleks MCMA')) {
+        if (opsiDInput && kategori === 'Benar/Salah') {
           opsiDInput.value = '';
         }
         if (kompleksHelp) {
           kompleksHelp.textContent = kategori === 'Pilihan Ganda Kompleks MCMA'
-            ? 'Pilih tepat 2 kunci benar dari 3 pernyataan.'
+            ? 'Pilih minimal 1 kunci benar dari 4 pernyataan.'
             : 'Pilih tepat 2 kunci dari 4 opsi.';
         }
         if (kompleksD) {
-          kompleksD.classList.toggle('hidden', kategori === 'Pilihan Ganda Kompleks MCMA');
+          kompleksD.classList.toggle('hidden', false);
         }
       }
 
@@ -359,7 +359,8 @@
     document.querySelectorAll('.kunci-kompleks-checkbox').forEach(function (checkbox) {
       checkbox.addEventListener('change', function () {
         var checked = Array.from(document.querySelectorAll('.kunci-kompleks-checkbox:checked'));
-        if (checked.length > 2) {
+        var kategori = kategoriSelect ? kategoriSelect.value : '';
+        if (kategori === 'Pilihan Ganda Kompleks' && checked.length > 2) {
           checkbox.checked = false;
           alert('Pilih tepat maksimal 2 kunci.');
           return;

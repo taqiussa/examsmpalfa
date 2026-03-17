@@ -12,10 +12,10 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
-      - proxy_network
+      - web
     ports:
       - "8830:3000"
 
 networks:
-  proxy_network:
+  web:
     external: true
