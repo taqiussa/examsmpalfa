@@ -302,9 +302,10 @@ pub async fn ujian_uraian_score(
                                         r#"
                                         SELECT COALESCE(SUM(CAST(COALESCE(j.nilai_uraian,0) AS DOUBLE)), 0)
                                         FROM ujian_jawabans j
+                                        JOIN soals s ON s.id = j.soal_id
                                         WHERE j.nis = ?
                                             AND j.ujian_id = ?
-                                            AND j.id IS NOT NULL
+                                            AND s.kategori = 'Uraian'
                                         "#,
                                 )
                                 .bind(&form.nis)

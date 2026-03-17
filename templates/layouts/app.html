@@ -9,6 +9,19 @@
   <title>{% block title %}{{ title }}{% endblock %}</title>
 
   {{ vite_css | safe }}
+  <style>
+    sup {
+      font-size: 0.75em;
+      line-height: 0;
+      vertical-align: super;
+    }
+
+    sub {
+      font-size: 0.75em;
+      line-height: 0;
+      vertical-align: sub;
+    }
+  </style>
 </head>
 
 <body class="bg-gray-100 h-screen overflow-hidden" x-data="{ sidebarOpen: false }">

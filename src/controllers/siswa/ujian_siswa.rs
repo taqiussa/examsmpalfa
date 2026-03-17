@@ -853,36 +853,37 @@ async fn finalize_submission(db: &MySqlPool, ujian_id: i64, nis: &str, peserta_i
             total_benar
         );
 
-        // total_possible: sum bobot_nilai of all questions in this ujian
+        // total_possible_non_uraian: sum bobot_nilai of all non-essay questions in this ujian.
+        // This keeps total_salah aligned with objective questions only.
         eprintln!(
-            "DEBUG finalize_submission: about to query total_possible with ujian_id={}",
+            "DEBUG finalize_submission: about to query total_possible_non_uraian with ujian_id={}",
             ujian_id
         );
 
-        // Fix: Cast DECIMAL to DOUBLE to avoid type mismatch in sqlx
-        let total_possible_result: Result<f64, _> = sqlx::query_scalar(
+        let total_possible_non_uraian_result: Result<f64, _> = sqlx::query_scalar(
             r#"
             SELECT COALESCE(SUM(CAST(COALESCE(s.bobot_nilai, 0) AS DOUBLE)), 0)
             FROM ujian_soals us
             JOIN soals s ON s.id = us.soal_id
             WHERE us.ujian_id = ?
+              AND s.kategori <> 'Uraian'
             "#,
         )
         .bind(ujian_id)
         .fetch_one(db)
         .await;
 
-        let total_possible = match total_possible_result {
+        let total_possible_non_uraian = match total_possible_non_uraian_result {
             Ok(val) => {
                 eprintln!(
-                    "DEBUG finalize_submission: total_possible query SUCCESS, value={}",
+                    "DEBUG finalize_submission: total_possible_non_uraian query SUCCESS, value={}",
                     val
                 );
                 val
             }
             Err(e) => {
                 eprintln!(
-                    "DEBUG finalize_submission: total_possible query FAILED: {:?}",
+                    "DEBUG finalize_submission: total_possible_non_uraian query FAILED: {:?}",
                     e
                 );
                 0.0
@@ -890,12 +891,12 @@ async fn finalize_submission(db: &MySqlPool, ujian_id: i64, nis: &str, peserta_i
         };
 
         eprintln!(
-            "DEBUG finalize_submission: total_possible = {}",
-            total_possible
+            "DEBUG finalize_submission: total_possible_non_uraian = {}",
+            total_possible_non_uraian
         );
 
-        // total_salah = total_possible - total_benar (clamp >= 0)
-        let mut total_salah = total_possible - total_benar;
+        // total_salah = total_possible_non_uraian - total_benar (clamp >= 0)
+        let mut total_salah = total_possible_non_uraian - total_benar;
         if total_salah < 0.0 {
             total_salah = 0.0;
         }
@@ -1026,6 +1027,21 @@ async fn finalize_submission(db: &MySqlPool, ujian_id: i64, nis: &str, peserta_i
     }
 
     0.0
+}
+
+fn parse_option_list(raw: &str) -> Vec<String> {
+    raw.split(',')
+        .map(|part| part.trim().to_lowercase())
+        .filter(|part| !part.is_empty())
+        .collect()
+}
+
+fn proportional_score(correct_count: usize, total_correct: usize, bobot_nilai: f64) -> f64 {
+    if total_correct == 0 || bobot_nilai <= 0.0 {
+        return 0.0;
+    }
+
+    (correct_count as f64 / total_correct as f64) * bobot_nilai
 }
 
 async fn simpan_jawaban_opsional(
@@ -1210,47 +1226,43 @@ async fn simpan_jawaban_opsional(
     }
 
     if kategori == "Pilihan Ganda Kompleks" {
-        // pilihan_raw expected like 'a' or 'a,c'
-        let selected: Vec<String> = pilihan_raw
-            .split(',')
-            .map(|s| s.trim().to_lowercase())
-            .filter(|s| !s.is_empty())
-            .collect();
+        let selected = parse_option_list(&pilihan_raw);
         if selected.is_empty() {
             return;
         }
-        // validate choices
-        for s in &selected {
-            if !matches!(s.as_str(), "a" | "b" | "c" | "d") {
+        let mut selected_unique = std::collections::HashSet::new();
+        for pilihan in &selected {
+            if !matches!(pilihan.as_str(), "a" | "b" | "c" | "d")
+                || !selected_unique.insert(pilihan.clone())
+            {
                 return;
             }
         }
-        if selected.len() != 2 {
+
+        let correct = parse_option_list(k.kunci_jawaban.as_deref().unwrap_or(""));
+        if correct.is_empty() || correct.len() > 4 {
             return;
         }
 
-        let correct: Vec<String> = k
-            .kunci_jawaban
-            .as_deref()
-            .unwrap_or("")
-            .split(',')
-            .map(|s| s.trim().to_lowercase())
-            .filter(|s| !s.is_empty())
-            .collect();
-
-        let mut matches = 0usize;
-        for s in &selected {
-            if correct.iter().any(|c| c == s) {
-                matches += 1;
+        let mut correct_unique = std::collections::HashSet::new();
+        for kunci in &correct {
+            if !matches!(kunci.as_str(), "a" | "b" | "c" | "d")
+                || !correct_unique.insert(kunci.clone())
+            {
+                return;
             }
         }
-        let matches_cap = std::cmp::min(matches, 2) as f64;
-        let per_correct = k.bobot_nilai / 2.0;
-        let nilai = matches_cap * per_correct;
-        if correct.len() != 2 {
+
+        if selected.len() != correct.len() {
             return;
         }
-        let is_benar = matches == correct.len() && correct.len() == 2;
+
+        let matched_correct_count = correct
+            .iter()
+            .filter(|kunci| selected_unique.contains(kunci.as_str()))
+            .count();
+        let nilai = proportional_score(matched_correct_count, correct.len(), k.bobot_nilai);
+        let is_benar = matched_correct_count == correct.len();
         let pilihan_store = selected.join(",");
 
         let res = sqlx::query(
@@ -1287,11 +1299,7 @@ async fn simpan_jawaban_opsional(
     }
 
     if kategori == "Pilihan Ganda Kompleks MCMA" {
-        let selected: Vec<String> = pilihan_raw
-            .split(',')
-            .map(|s| s.trim().to_lowercase())
-            .filter(|s| !s.is_empty())
-            .collect();
+        let selected = parse_option_list(&pilihan_raw);
         if selected.is_empty() || selected.len() > 4 {
             return;
         }
@@ -1302,14 +1310,7 @@ async fn simpan_jawaban_opsional(
             }
         }
 
-        let correct: Vec<String> = k
-            .kunci_jawaban
-            .as_deref()
-            .unwrap_or("")
-            .split(',')
-            .map(|s| s.trim().to_lowercase())
-            .filter(|s| !s.is_empty())
-            .collect();
+        let correct = parse_option_list(k.kunci_jawaban.as_deref().unwrap_or(""));
         if correct.is_empty() || correct.len() > 4 {
             return;
         }
@@ -1329,8 +1330,7 @@ async fn simpan_jawaban_opsional(
             .iter()
             .filter(|key| selected_set.contains(key.as_str()))
             .count();
-        let total_correct = correct.len() as f64;
-        let nilai = (matched_correct_count as f64 / total_correct) * k.bobot_nilai;
+        let nilai = proportional_score(matched_correct_count, correct.len(), k.bobot_nilai);
         let is_benar = selected_set.len() == correct_set.len() && selected_set == correct_set;
         let pilihan_store = selected.join(",");
 
@@ -1368,23 +1368,12 @@ async fn simpan_jawaban_opsional(
     }
 
     if kategori == "Benar/Salah" {
-        let pilihan_parts: Vec<String> = pilihan_raw
-            .split(',')
-            .map(|part| part.trim().to_lowercase())
-            .filter(|part| !part.is_empty())
-            .collect();
+        let pilihan_parts = parse_option_list(&pilihan_raw);
         if pilihan_parts.is_empty() {
             return;
         }
 
-        let kunci_parts: Vec<String> = k
-            .kunci_jawaban
-            .as_deref()
-            .unwrap_or("")
-            .split(',')
-            .map(|part| part.trim().to_lowercase())
-            .filter(|part| !part.is_empty())
-            .collect();
+        let kunci_parts = parse_option_list(k.kunci_jawaban.as_deref().unwrap_or(""));
 
         if pilihan_parts.len() != kunci_parts.len() || kunci_parts.is_empty() {
             return;
@@ -1402,15 +1391,8 @@ async fn simpan_jawaban_opsional(
             }
         }
 
-        let total = kunci_parts.len() as f64;
-        let raw_ratio = correct_count as f64 / total;
-        let ratio = if correct_count == kunci_parts.len() {
-            1.0
-        } else {
-            (raw_ratio * 10.0).floor() / 10.0
-        };
         let is_benar = correct_count == kunci_parts.len();
-        let nilai = ratio * k.bobot_nilai;
+        let nilai = proportional_score(correct_count, kunci_parts.len(), k.bobot_nilai);
         let pilihan_store = pilihan_parts.join(",");
 
         let res = sqlx::query(

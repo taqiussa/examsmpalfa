@@ -102,10 +102,7 @@ pub async fn ujian_progress(
                     COALESCE(
                         SUM(
                             CAST(
-                                CASE
-                                    WHEN j.is_benar = 1 THEN COALESCE(CAST(j.bobot_nilai AS DECIMAL(5,2)), 0)
-                                    ELSE 0
-                                END AS DECIMAL(5,2)
+                                COALESCE(j.bobot_nilai, 0) AS DECIMAL(5,2)
                             ),
                             0
                         ),
