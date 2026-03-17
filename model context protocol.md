@@ -87,7 +87,7 @@ Catatan: Tabel lain (`users`, `roles`, `model_has_roles`, `kelas`, `siswas`, `bi
 - Public: `/login`.
 - Auth common: `/`, `/dashboard`, `/logout`.
 - Admin: `/tambah-pengguna`.
-- Guru: `/absensi-kelas`, `/biodata-siswa`, `/ujian`, `/progress-ujian`, `/review-uraian`, `/hasil-nilai`.
+- Guru: `/absensi-kelas`, `/data-peserta`, `/ujian`, `/progress-ujian`, `/review-uraian`, `/hasil-nilai`.
 - Siswa: `/siswa/ujian` + token flow.
 
 ## File Referensi Kunci

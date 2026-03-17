@@ -26,7 +26,7 @@
         "name": "username!",
         "type_info": {
           "type": "VarString",
-          "flags": "UNIQUE_KEY",
+          "flags": "MULTIPLE_KEY",
           "max_size": 120
         }
       }

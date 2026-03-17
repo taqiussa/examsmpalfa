@@ -45,90 +45,96 @@
           <span class="ml-2 font-semibold">D.</span>
           <span>{{ data.current.opsi_d | safe }}</span>
         </label>
-        <label class="rounded-md border border-slate-200 p-3 hover:bg-slate-50 cursor-pointer">
-          <input type="radio" name="pilihan" value="e" {% if data.current.jawaban_terpilih=="e" %}checked{% endif %}>
-          <span class="ml-2 font-semibold">E.</span>
-          <span>{{ data.current.opsi_e | safe }}</span>
-        </label>
       </div>
       {% elif data.current.kategori == "Pilihan Ganda Kompleks" %}
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <label class="rounded-md border border-slate-200 p-3 hover:bg-slate-50 cursor-pointer">
-          <input type="checkbox" name="pilihan" value="a" {% if data.current.jawaban_terpilih and 'a' in
-            data.current.jawaban_terpilih %}checked{% endif %}>
+          <input type="checkbox" name="pilihan" value="a" {% if data.current.jawaban_terpilih and 'a' in data.current.jawaban_terpilih %}checked{% endif %}>
           <span class="ml-2 font-semibold">A.</span>
           <span>{{ data.current.opsi_a | safe }}</span>
         </label>
         <label class="rounded-md border border-slate-200 p-3 hover:bg-slate-50 cursor-pointer">
-          <input type="checkbox" name="pilihan" value="b" {% if data.current.jawaban_terpilih and 'b' in
-            data.current.jawaban_terpilih %}checked{% endif %}>
+          <input type="checkbox" name="pilihan" value="b" {% if data.current.jawaban_terpilih and 'b' in data.current.jawaban_terpilih %}checked{% endif %}>
           <span class="ml-2 font-semibold">B.</span>
           <span>{{ data.current.opsi_b | safe }}</span>
         </label>
         <label class="rounded-md border border-slate-200 p-3 hover:bg-slate-50 cursor-pointer">
-          <input type="checkbox" name="pilihan" value="c" {% if data.current.jawaban_terpilih and 'c' in
-            data.current.jawaban_terpilih %}checked{% endif %}>
+          <input type="checkbox" name="pilihan" value="c" {% if data.current.jawaban_terpilih and 'c' in data.current.jawaban_terpilih %}checked{% endif %}>
           <span class="ml-2 font-semibold">C.</span>
           <span>{{ data.current.opsi_c | safe }}</span>
         </label>
         <label class="rounded-md border border-slate-200 p-3 hover:bg-slate-50 cursor-pointer">
-          <input type="checkbox" name="pilihan" value="d" {% if data.current.jawaban_terpilih and 'd' in
-            data.current.jawaban_terpilih %}checked{% endif %}>
+          <input type="checkbox" name="pilihan" value="d" {% if data.current.jawaban_terpilih and 'd' in data.current.jawaban_terpilih %}checked{% endif %}>
           <span class="ml-2 font-semibold">D.</span>
           <span>{{ data.current.opsi_d | safe }}</span>
         </label>
-        <label class="rounded-md border border-slate-200 p-3 hover:bg-slate-50 cursor-pointer">
-          <input type="checkbox" name="pilihan" value="e" {% if data.current.jawaban_terpilih and 'e' in
-            data.current.jawaban_terpilih %}checked{% endif %}>
-          <span class="ml-2 font-semibold">E.</span>
-          <span>{{ data.current.opsi_e | safe }}</span>
-        </label>
       </div>
-      <div class="text-xs text-rose-600">Pilih maksimal 2 jawaban.</div>
-      {% else %}
-      {% if data.current.kategori == "Benar/Salah" %}
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <label class="rounded-md border border-slate-200 p-3 hover:bg-slate-50 cursor-pointer">
-          <input type="radio" name="pilihan" value="benar" {% if data.current.jawaban_terpilih=="benar" %}checked{%
-            endif %}>
-          <span class="ml-2 font-semibold">Benar</span>
-        </label>
-        <label class="rounded-md border border-slate-200 p-3 hover:bg-slate-50 cursor-pointer">
-          <input type="radio" name="pilihan" value="salah" {% if data.current.jawaban_terpilih=="salah" %}checked{%
-            endif %}>
-          <span class="ml-2 font-semibold">Salah</span>
-        </label>
+      <div class="text-xs text-rose-600">Pilih tepat 2 jawaban.</div>
+      {% elif data.current.kategori == "Pilihan Ganda Kompleks MCMA" %}
+      <div class="space-y-3">
+        <div class="text-xs text-slate-600">Centang tepat 2 pernyataan yang benar.</div>
+        <div class="grid grid-cols-1 gap-3">
+          <label class="rounded-md border border-slate-200 p-3 hover:bg-slate-50 cursor-pointer">
+            <input type="checkbox" name="pilihan" value="a" {% if data.current.jawaban_terpilih and 'a' in data.current.jawaban_terpilih %}checked{% endif %}>
+            <span class="ml-2 font-semibold">Pernyataan 1.</span>
+            <span>{{ data.current.opsi_a | safe }}</span>
+          </label>
+          <label class="rounded-md border border-slate-200 p-3 hover:bg-slate-50 cursor-pointer">
+            <input type="checkbox" name="pilihan" value="b" {% if data.current.jawaban_terpilih and 'b' in data.current.jawaban_terpilih %}checked{% endif %}>
+            <span class="ml-2 font-semibold">Pernyataan 2.</span>
+            <span>{{ data.current.opsi_b | safe }}</span>
+          </label>
+          <label class="rounded-md border border-slate-200 p-3 hover:bg-slate-50 cursor-pointer">
+            <input type="checkbox" name="pilihan" value="c" {% if data.current.jawaban_terpilih and 'c' in data.current.jawaban_terpilih %}checked{% endif %}>
+            <span class="ml-2 font-semibold">Pernyataan 3.</span>
+            <span>{{ data.current.opsi_c | safe }}</span>
+          </label>
+        </div>
       </div>
-      {% endif %}
+      <div class="text-xs text-rose-600">Pilih tepat 2 pernyataan.</div>
+      {% elif data.current.kategori == "Benar/Salah" %}
+      <div class="space-y-3">
+        {% for item in data.current.pernyataan_bs %}
+        <div class="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
+          <div class="text-sm font-semibold text-slate-700">Pernyataan {{ item.label }}</div>
+          <div class="prose prose-sm max-w-none">{{ item.text | safe }}</div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <label class="rounded-md border border-slate-200 p-3 hover:bg-slate-50 cursor-pointer">
+              <input type="radio" name="pilihan_bs_{{ loop.index }}" value="benar" {% if item.jawaban=="benar" %}checked{% endif %}>
+              <span class="ml-2 font-semibold">Benar</span>
+            </label>
+            <label class="rounded-md border border-slate-200 p-3 hover:bg-slate-50 cursor-pointer">
+              <input type="radio" name="pilihan_bs_{{ loop.index }}" value="salah" {% if item.jawaban=="salah" %}checked{% endif %}>
+              <span class="ml-2 font-semibold">Salah</span>
+            </label>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
       {% endif %}
       {% else %}
       <div class="rounded-md border border-slate-200 bg-white p-3">
         <label class="block text-sm font-medium text-slate-700 mb-2">Jawaban Uraian</label>
-        <textarea name="jawaban_uraian" rows="5" class="input w-full"
-          placeholder="Tulis jawaban uraian di sini...">{{ data.current.jawaban_uraian | default(value="") }}</textarea>
+        <textarea name="jawaban_uraian" rows="5" class="input w-full" placeholder="Tulis jawaban uraian di sini...">{{ data.current.jawaban_uraian | default(value="") }}</textarea>
       </div>
       {% endif %}
 
       <div class="flex items-center gap-2 pt-2">
         {% if data.nomor_saat_ini > 1 %}
-        <button type="button" class="button bg-slate-600 hover:bg-slate-700"
-          onclick="goToNomor({{ data.nomor_saat_ini - 1 }})">
+        <button type="button" class="button bg-slate-600 hover:bg-slate-700" onclick="goToNomor({{ data.nomor_saat_ini - 1 }})">
           Simpan & Sebelumnya
         </button>
         {% endif %}
-        {% if data.nomor_saat_ini < data.total_soal %} <button type="button" class="button"
-          onclick="goToNomor({{ data.nomor_saat_ini + 1 }})">
+        {% if data.nomor_saat_ini < data.total_soal %}
+        <button type="button" class="button" onclick="goToNomor({{ data.nomor_saat_ini + 1 }})">
           Simpan & Berikutnya
-          </button>
-          {% else %}
-          <button type="submit" form="submit-ujian-form" class="button bg-rose-600 hover:bg-rose-700"
-            data-confirm="Yakin submit ujian sekarang? Setelah submit jawaban tidak bisa diubah."
-            data-confirm-text="Submit">
-            Simpan & Submit
-          </button>
-          {% endif %}
+        </button>
+        {% else %}
+        <button type="submit" form="submit-ujian-form" class="button bg-rose-600 hover:bg-rose-700" data-confirm="Yakin submit ujian sekarang? Setelah submit jawaban tidak bisa diubah." data-confirm-text="Submit">
+          Simpan & Submit
+        </button>
+        {% endif %}
       </div>
-
     </form>
     {% endif %}
   </div>
@@ -137,9 +143,7 @@
     <h2 class="text-base font-semibold text-slate-700">Navigasi Nomor</h2>
     <div class="grid grid-cols-5 gap-2">
       {% for n in data.nav %}
-      <button type="button"
-        class="rounded-md border px-2 py-1 text-sm font-semibold {% if n.aktif %}bg-emerald-600 text-white border-emerald-600{% elif n.terjawab %}bg-sky-50 text-sky-700 border-sky-200{% else %}bg-white text-slate-700 border-slate-200{% endif %}"
-        onclick="goToNomor({{ n.nomor }})">
+      <button type="button" class="rounded-md border px-2 py-1 text-sm font-semibold {% if n.aktif %}bg-emerald-600 text-white border-emerald-600{% elif n.terjawab %}bg-sky-50 text-sky-700 border-sky-200{% else %}bg-white text-slate-700 border-slate-200{% endif %}" onclick="goToNomor({{ n.nomor }})">
         {{ n.nomor }}
       </button>
       {% endfor %}
@@ -173,20 +177,53 @@
     const jawabanForm = document.getElementById('jawaban-form');
     if (!submitForm || !pilihanInput || !jawabanForm) return;
 
-    submitForm.addEventListener('submit', function (e) {
+    function collectPilihan() {
       const kategori = '{{ data.current.kategori | default(value="") }}';
-      if (kategori === 'Pilihan Ganda Kompleks') {
+      if (kategori === 'Pilihan Ganda Kompleks' || kategori === 'Pilihan Ganda Kompleks MCMA') {
         const checkedBoxes = Array.from(jawabanForm.querySelectorAll('input[type="checkbox"][name="pilihan"]:checked'));
         if (checkedBoxes.length !== 2) {
-          e.preventDefault();
-          alert('Pilih tepat 2 jawaban.');
-          return;
+          return { error: kategori === 'Pilihan Ganda Kompleks MCMA' ? 'Pilih tepat 2 pernyataan.' : 'Pilih tepat 2 jawaban.' };
         }
-        pilihanInput.value = checkedBoxes.map(b => b.value).join(',');
-      } else {
-        const checked = jawabanForm.querySelector('input[name="pilihan"]:checked');
-        pilihanInput.value = checked ? checked.value : '';
+        return { value: checkedBoxes.map(function (box) { return box.value; }).join(',') };
       }
+
+      if (kategori === 'Benar/Salah') {
+        const groups = Array.from(jawabanForm.querySelectorAll('input[type="radio"][name^="pilihan_bs_"]'))
+          .reduce(function (acc, input) {
+            if (acc.indexOf(input.name) === -1) acc.push(input.name);
+            return acc;
+          }, []);
+        const values = [];
+        for (const name of groups) {
+          const checked = jawabanForm.querySelector('input[name="' + name + '"]:checked');
+          if (!checked) {
+            return { error: 'Jawab semua pernyataan Benar/Salah terlebih dahulu.' };
+          }
+          values.push(checked.value);
+        }
+        return { value: values.join(',') };
+      }
+
+      const checked = jawabanForm.querySelector('input[name="pilihan"]:checked');
+      return { value: checked ? checked.value : '' };
+    }
+
+    jawabanForm.addEventListener('submit', function (e) {
+      const collected = collectPilihan();
+      if (collected.error) {
+        e.preventDefault();
+        alert(collected.error);
+      }
+    });
+
+    submitForm.addEventListener('submit', function (e) {
+      const collected = collectPilihan();
+      if (collected.error) {
+        e.preventDefault();
+        alert(collected.error);
+        return;
+      }
+      pilihanInput.value = collected.value || '';
 
       const uraianInput = jawabanForm.querySelector('textarea[name="jawaban_uraian"]');
       const submitUraian = document.getElementById('submit-uraian');
@@ -196,31 +233,31 @@
     });
 
     const deadline = Number({{ data.timer_deadline_ms }});
-  const countdown = document.getElementById('countdown');
-  let autoSubmitted = false;
+    const countdown = document.getElementById('countdown');
+    let autoSubmitted = false;
 
-  function formatMs(ms) {
-    const total = Math.max(0, Math.floor(ms / 1000));
-    const m = Math.floor(total / 60).toString().padStart(2, '0');
-    const s = (total % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
-  }
-
-  function tick() {
-    const remain = deadline - Date.now();
-    if (countdown) {
-      countdown.textContent = `Sisa waktu: ${formatMs(remain)}`;
+    function formatMs(ms) {
+      const total = Math.max(0, Math.floor(ms / 1000));
+      const m = Math.floor(total / 60).toString().padStart(2, '0');
+      const s = (total % 60).toString().padStart(2, '0');
+      return `${m}:${s}`;
     }
-    if (remain <= 0 && !autoSubmitted) {
-      autoSubmitted = true;
-      const checked = jawabanForm.querySelector('input[name=\"pilihan\"]:checked');
-      pilihanInput.value = checked ? checked.value : '';
-      submitForm.requestSubmit();
-    }
-  }
 
-  tick();
-  setInterval(tick, 1000);
+    function tick() {
+      const remain = deadline - Date.now();
+      if (countdown) {
+        countdown.textContent = `Sisa waktu: ${formatMs(remain)}`;
+      }
+      if (remain <= 0 && !autoSubmitted) {
+        autoSubmitted = true;
+        const collected = collectPilihan();
+        pilihanInput.value = collected.value || '';
+        submitForm.requestSubmit();
+      }
+    }
+
+    tick();
+    setInterval(tick, 1000);
   });
 </script>
 {% endblock %}

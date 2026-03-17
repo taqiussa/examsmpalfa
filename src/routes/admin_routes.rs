@@ -2,6 +2,7 @@ use crate::{
     controllers::admin::tambah_pengguna::{
         hapus_pengguna_action, pengguna_table, tambah_pengguna_action, tambah_pengguna_page,
     },
+    controllers::admin::upload_peserta::{upload_peserta_action, upload_peserta_page},
     middlewares::role_middleware::{AllowedRoles, role_middleware},
     models::role::Role,
 };
@@ -17,6 +18,8 @@ pub fn admin_routes() -> Router {
         .route("/tambah-pengguna", post(tambah_pengguna_action))
         .route("/tambah-pengguna/table", get(pengguna_table))
         .route("/tambah-pengguna/delete", post(hapus_pengguna_action))
+        .route("/upload-peserta", get(upload_peserta_page))
+        .route("/upload-peserta", post(upload_peserta_action))
         .route_layer(middleware::from_fn(role_middleware))
         .layer(Extension(AllowedRoles(vec![Role::Admin])))
 }

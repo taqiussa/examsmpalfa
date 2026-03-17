@@ -37,22 +37,6 @@
 
                 <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">
-                                Jurusan Akses <span class="text-rose-500">*</span>
-                        </label>
-                        <select name="jurusan" class="input w-full" required>
-                                <option value="UMUM" {% if data.jurusan=="UMUM" %}selected{% endif %}>UMUM (semua
-                                        jurusan)</option>
-                                <option value="PBS" {% if data.jurusan=="PBS" %}selected{% endif %}>PBS</option>
-                                <option value="TKR" {% if data.jurusan=="TKR" %}selected{% endif %}>TKR</option>
-                                <option value="TKJ" {% if data.jurusan=="TKJ" %}selected{% endif %}>TKJ</option>
-                        </select>
-                        {% if data.errors and data.errors.jurusan %}
-                        <p class="text-xs text-rose-500 mt-1">{{ data.errors.jurusan }}</p>
-                        {% endif %}
-                </div>
-
-                <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">
                                 Judul Ujian <span class="text-rose-500">*</span>
                         </label>
                         <input type="text" name="title" value="{{ data.title }}"

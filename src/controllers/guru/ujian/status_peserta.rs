@@ -15,6 +15,9 @@ use super::{StatusPesertaFilter, UjianOption, fetch_ujian_options, flash_error, 
 #[derive(Serialize)]
 struct StatusPesertaData {
     tahun: String,
+    lab_kode: String,
+    sesi: i32,
+    gelombang: i32,
     list_ujian: Vec<UjianOption>,
     selected_ujian_id: i64,
     list_peserta: Vec<PesertaStatusRow>,
@@ -22,6 +25,10 @@ struct StatusPesertaData {
 
 #[derive(Serialize)]
 struct StatusPesertaTableData {
+    tahun: String,
+    lab_kode: String,
+    sesi: i32,
+    gelombang: i32,
     list_peserta: Vec<PesertaStatusRow>,
     selected_ujian_id: i64,
 }
@@ -29,9 +36,15 @@ struct StatusPesertaTableData {
 #[derive(Serialize, sqlx::FromRow)]
 struct PesertaStatusRow {
     peserta_id: i64,
+    pengerjaan_id: Option<i64>,
     nis: String,
     nama: Option<String>,
+    kelas_id: Option<i64>,
     kelas: Option<String>,
+    tahun: Option<String>,
+    lab_kode: Option<String>,
+    sesi: Option<i32>,
+    gelombang: Option<i32>,
     status: String,
 }
 
@@ -54,6 +67,9 @@ pub async fn status_peserta_page(
 
     let data = StatusPesertaData {
         tahun,
+        lab_kode: "01".to_string(),
+        sesi: 1,
+        gelombang: 1,
         list_ujian,
         selected_ujian_id,
         list_peserta: Vec::new(),
@@ -74,6 +90,15 @@ pub async fn status_peserta_table(
     axum::Extension(db): axum::Extension<MySqlPool>,
 ) -> axum::response::Response {
     let tahun = filter.tahun.clone().unwrap_or_else(data_tahun);
+    let lab_kode = match filter.lab_kode.as_deref() {
+        Some("02") => "02".to_string(),
+        _ => "01".to_string(),
+    };
+    let sesi = filter.sesi.filter(|v| (1..=4).contains(v)).unwrap_or(1);
+    let gelombang = filter
+        .gelombang
+        .filter(|v| (1..=4).contains(v))
+        .unwrap_or(1);
     let list_ujian = fetch_ujian_options(&db, &tahun).await;
     let selected_ujian_id = filter
         .ujian_id
@@ -82,11 +107,14 @@ pub async fn status_peserta_table(
 
     if !is_htmx {
         let url = if selected_ujian_id == 0 {
-            format!("/status-peserta?tahun={}", tahun)
+            format!(
+                "/status-peserta?tahun={}&lab_kode={}&sesi={}&gelombang={}",
+                tahun, lab_kode, sesi, gelombang
+            )
         } else {
             format!(
-                "/status-peserta?tahun={}&ujian_id={}",
-                tahun, selected_ujian_id
+                "/status-peserta?tahun={}&ujian_id={}&lab_kode={}&sesi={}&gelombang={}",
+                tahun, selected_ujian_id, lab_kode, sesi, gelombang
             )
         };
         return Redirect::to(&url).into_response();
@@ -99,23 +127,46 @@ pub async fn status_peserta_table(
             r#"
             SELECT
                 p.id as peserta_id,
+                CAST(jp.id AS SIGNED) as pengerjaan_id,
                 p.nis,
                 u.name as nama,
+                CAST(p.kelas_id AS SIGNED) as kelas_id,
                 k.nama as kelas,
-                p.status
+                p.tahun,
+                p.lab_kode,
+                CAST(p.sesi AS SIGNED) as sesi,
+                CAST(p.gelombang AS SIGNED) as gelombang,
+                COALESCE(jp.status, 'not_started') as status
             FROM ujian_pesertas p
             LEFT JOIN users u ON u.nis = p.nis
-            LEFT JOIN siswas s ON s.nis = p.nis AND s.tahun = ?
-            LEFT JOIN kelas k ON k.id = s.kelas_id
-            WHERE p.ujian_id = ?
+            LEFT JOIN kelas k ON k.id = p.kelas_id
+            LEFT JOIN ujian_pengerjaans jp
+                ON jp.ujian_id = ?
+               AND jp.nis = p.nis
+            WHERE p.tahun = ?
+              AND p.lab_kode = ?
+              AND p.sesi = ?
+              AND p.gelombang = ?
             ORDER BY
-                CASE WHEN p.status = 'submitted' THEN 0 ELSE 1 END,
+                p.tahun ASC,
+                p.lab_kode ASC,
+                p.sesi ASC,
+                p.gelombang ASC,
+                CASE
+                    WHEN COALESCE(jp.status, 'not_started') = 'submitted' THEN 0
+                    WHEN COALESCE(jp.status, 'not_started') = 'started' THEN 1
+                    ELSE 2
+                END,
+                k.nama ASC,
                 u.name ASC,
                 p.nis ASC
             "#,
         )
-        .bind(&tahun)
         .bind(selected_ujian_id)
+        .bind(&tahun)
+        .bind(&lab_kode)
+        .bind(sesi)
+        .bind(gelombang)
         .fetch_all(&db)
         .await
         .unwrap_or_else(|e| {
@@ -128,6 +179,10 @@ pub async fn status_peserta_table(
     };
 
     let data = StatusPesertaTableData {
+        tahun,
+        lab_kode,
+        sesi,
+        gelombang,
         list_peserta,
         selected_ujian_id,
     };
@@ -162,7 +217,7 @@ pub async fn status_peserta_toggle(
 
     let result = sqlx::query(
         r#"
-        UPDATE ujian_pesertas
+        UPDATE ujian_pengerjaans
         SET status = ?,
             submitted_at = CASE WHEN ? = 'submitted' THEN NOW() ELSE NULL END,
             updated_at = NOW()

@@ -363,7 +363,7 @@ pub async fn ujian_uraian_score(
 
             let _ = sqlx::query(
                 r#"
-                UPDATE ujian_pesertas
+                UPDATE ujian_pengerjaans
                 SET total_nilai = ?,
                     updated_at = NOW()
                 WHERE ujian_id = ? AND nis = ?

@@ -1,0 +1,69 @@
+{% extends "layouts/app.html" %}
+
+{% block content %}
+<div class="card space-y-6">
+
+        <div>
+                <h1 class="card-header">Data Peserta</h1>
+                <p class="text-sm text-slate-500 mt-1">Daftar Peserta Try Out 3 TKA</p>
+        </div>
+
+        <form class="md:grid gap-4 md:grid-cols-4 space-y-2 md:space-y-0" hx-get="/data-peserta/table"
+                hx-target="#siswa-table" hx-trigger="change from:select" hx-push-url="true">
+
+                <div class="flex flex-col space-y-1 text-md text-slate-600">
+                        <div>Tahun</div>
+                        <select name="tahun"
+                                class="border p-2 rounded-md shadow-md shadow-emerald-400 border-slate-200 focus:ring focus:ring-emerald-300">
+                                <option value="" {% if data.tahun=="" %}selected{% endif %}>Semua Tahun</option>
+                                {% for tahun in data.list_tahun %}
+                                <option value="{{ tahun }}" {% if data.tahun==tahun %}selected{% endif %}>{{ tahun }}
+                                </option>
+                                {% endfor %}
+                        </select>
+                </div>
+
+                <div class="flex flex-col space-y-1 text-md text-slate-600">
+                        <div>Gelombang</div>
+                        <select name="gelombang"
+                                class="border p-2 rounded-md shadow-md shadow-emerald-400 border-slate-200 focus:ring focus:ring-emerald-300">
+                                <option value="0" {% if data.gelombang==0 %}selected{% endif %}>Semua Gelombang</option>
+                                <option value="3" {% if data.gelombang==3 %}selected{% endif %}>3</option>
+                                <option value="4" {% if data.gelombang==4 %}selected{% endif %}>4</option>
+                        </select>
+                </div>
+
+                <div class="flex flex-col space-y-1 text-md text-slate-600">
+                        <div>Lab</div>
+                        <select name="lab_kode"
+                                class="border p-2 rounded-md shadow-md shadow-emerald-400 border-slate-200 focus:ring focus:ring-emerald-300">
+                                <option value="" {% if data.lab_kode=="" %}selected{% endif %}>Semua Lab</option>
+                                <option value="01" {% if data.lab_kode=="01" %}selected{% endif %}>Lab Utara (01)
+                                </option>
+                                <option value="02" {% if data.lab_kode=="02" %}selected{% endif %}>Lab Selatan (02)
+                                </option>
+                        </select>
+                </div>
+
+                <div class="flex flex-col space-y-1 text-md text-slate-600">
+                        <div>Sesi</div>
+                        <select name="sesi"
+                                class="border p-2 rounded-md shadow-md shadow-emerald-400 border-slate-200 focus:ring focus:ring-emerald-300">
+                                <option value="0" {% if data.sesi==0 %}selected{% endif %}>Semua Sesi</option>
+                                <option value="1" {% if data.sesi==1 %}selected{% endif %}>1</option>
+                                <option value="2" {% if data.sesi==2 %}selected{% endif %}>2</option>
+                                <option value="3" {% if data.sesi==3 %}selected{% endif %}>3</option>
+                                <option value="4" {% if data.sesi==4 %}selected{% endif %}>4</option>
+                        </select>
+                </div>
+
+                <input type="hidden" name="page" value="1">
+
+        </form>
+
+        <div class=" overflow-x-auto" id="siswa-table"
+                hx-get="/data-peserta/table?tahun={{ data.tahun }}&gelombang={{ data.gelombang }}&lab_kode={{ data.lab_kode }}&sesi={{ data.sesi }}&page=1"
+                hx-trigger="load"></div>
+
+</div>
+{% endblock %}

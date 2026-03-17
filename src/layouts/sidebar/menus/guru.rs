@@ -5,9 +5,9 @@ pub fn menu(current_path: &str) -> Vec<SidebarItem> {
     vec![
         SidebarItem {
             kind: "link",
-            href: "/biodata-siswa",
-            label: "Biodata Siswa",
-            active: is_active(current_path, "/biodata-siswa"),
+            href: "/data-peserta",
+            label: "Data Peserta",
+            active: is_active(current_path, "/data-peserta"),
         },
         SidebarItem {
             kind: "link",

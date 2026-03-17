@@ -8,7 +8,7 @@ use crate::{
         absensi_kelas::{
             absensi_kelas, absensi_kelas_mark_all, absensi_kelas_table, absensi_kelas_update,
         },
-        biodata_siswa::{biodata_siswa, biodata_siswa_table},
+        data_peserta::{data_peserta, data_peserta_table},
         ujian::{
             nilai_kelas_mapel_export, nilai_kelas_mapel_page, nilai_kelas_mapel_table, soal_create,
             soal_delete, soal_image_upload, soal_store, status_peserta_page, status_peserta_table,
@@ -28,8 +28,8 @@ pub fn guru_routes() -> Router {
         .route("/absensi-kelas/table", get(absensi_kelas_table))
         .route("/absensi-kelas/mark-all", post(absensi_kelas_mark_all))
         .route("/absensi-kelas/update", post(absensi_kelas_update))
-        .route("/biodata-siswa", get(biodata_siswa))
-        .route("/biodata-siswa/table", get(biodata_siswa_table))
+        .route("/data-peserta", get(data_peserta))
+        .route("/data-peserta/table", get(data_peserta_table))
         .route("/ujian", get(ujian_index))
         .route("/ujian/table", get(ujian_table))
         .route("/ujian/create", get(ujian_create))

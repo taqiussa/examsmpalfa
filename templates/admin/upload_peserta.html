@@ -1,0 +1,35 @@
+{% extends "layouts/app.html" %}
+
+{% block content %}
+<div class="card space-y-6">
+  <div>
+    <h1 class="text-xl font-semibold">Upload Peserta</h1>
+    <p class="text-sm text-slate-500 mt-1">Upload data peserta global dari file Excel `.xls` atau `.xlsx` dengan heading baris pertama.</p>
+  </div>
+
+  <div class="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 space-y-2">
+    <div class="font-medium text-slate-700">Format heading Excel</div>
+    <div>`tahun`, `nis`, `kelas_id`, `lab_id`, `gelombang`, `sesi`</div>
+    <div>Contoh nilai `lab_id`: `01` atau `02`.</div>
+    <div>Baris pertama wajib header, baris berikutnya data peserta.</div>
+    <div>Data ini bersifat global, jadi tidak perlu memilih ujian atau mata pelajaran.</div>
+  </div>
+
+  <div class="bg-white border border-slate-200 rounded-lg p-4 space-y-4">
+    <div>
+      <h2 class="text-base font-semibold text-slate-700">File Peserta</h2>
+      <p class="text-xs text-slate-500 mt-1">Sistem membaca heading row Excel secara langsung, jadi Anda tidak perlu mengubah file menjadi CSV.</p>
+    </div>
+
+    <form hx-post="/upload-peserta" hx-encoding="multipart/form-data" hx-swap="none" class="flex flex-wrap items-end gap-3">
+      <div class="min-w-[320px] flex-1">
+        <label class="block text-sm text-slate-600 mb-1">File Excel</label>
+        <input type="file" name="file" class="input" accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+      </div>
+      <button type="submit" class="button bg-slate-700 text-white hover:bg-slate-800">
+        Upload Excel
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}

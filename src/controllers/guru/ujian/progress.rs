@@ -15,6 +15,9 @@ use crate::controllers::guru::absensi_kelas::Htmx;
 #[derive(Serialize)]
 struct UjianProgressData {
     tahun: String,
+    lab_kode: String,
+    sesi: i32,
+    gelombang: i32,
     list_ujian: Vec<UjianOption>,
     active_ujian: Option<UjianOption>,
     selected_ujian: Option<UjianDetailRow>,
@@ -41,6 +44,15 @@ pub async fn ujian_progress(
     );
 
     let tahun = filter.tahun.clone().unwrap_or_else(data_tahun);
+    let lab_kode = match filter.lab_kode.as_deref() {
+        Some("02") => "02".to_string(),
+        _ => "01".to_string(),
+    };
+    let sesi = filter.sesi.filter(|v| (1..=4).contains(v)).unwrap_or(1);
+    let gelombang = filter
+        .gelombang
+        .filter(|v| (1..=4).contains(v))
+        .unwrap_or(1);
     let list_ujian = fetch_ujian_options(&db, &tahun).await;
     // Debug list_ujian contents to ensure mata_pelajaran is present
     eprintln!(
@@ -82,7 +94,7 @@ pub async fn ujian_progress(
     if let Some(ujian_id) = ujian_to_show {
         let _ = sqlx::query(
             r#"
-            UPDATE ujian_pesertas p
+            UPDATE ujian_pengerjaans p
             LEFT JOIN (
                 SELECT
                     j.ujian_id,
@@ -136,7 +148,6 @@ pub async fn ujian_progress(
                 u.waktu_menit,
                 COALESCE(u.total_soal, 0) as total_soal,
                 u.is_active,
-                u.jurusan,
                 mp.nama as mata_pelajaran
             FROM ujians u
             JOIN mata_pelajarans mp ON mp.id = u.mata_pelajaran_id
@@ -163,6 +174,10 @@ pub async fn ujian_progress(
                 SELECT
                     id,
                     token,
+                    tahun,
+                    lab_kode,
+                    CAST(sesi AS SIGNED) as sesi,
+                    CAST(gelombang AS SIGNED) as gelombang,
                     is_active,
                     DATE_FORMAT(expired_at, '%Y-%m-%d %H:%i') as expired_at,
                     DATE_FORMAT(created_at, '%Y-%m-%d %H:%i') as created_at
@@ -188,20 +203,45 @@ pub async fn ujian_progress(
                 SELECT
                     COALESCE(u.name, CONCAT('NIS ', p.nis)) as nama,
                     p.nis,
-                    p.status,
-                    p.last_nomor,
-                    CAST(COALESCE(p.total_nilai, 0) AS DOUBLE) as total_nilai,
-                    DATE_FORMAT(p.submitted_at, '%Y-%m-%d %H:%i') as submitted_at
+                    k.nama as kelas,
+                    p.tahun,
+                    p.lab_kode,
+                    CAST(p.sesi AS SIGNED) as sesi,
+                    CAST(p.gelombang AS SIGNED) as gelombang,
+                    COALESCE(jp.status, 'not_started') as status,
+                    CAST(jp.last_nomor AS SIGNED) as last_nomor,
+                    CAST(jp.total_nilai AS DOUBLE) as total_nilai,
+                    DATE_FORMAT(jp.submitted_at, '%Y-%m-%d %H:%i') as submitted_at
                 FROM ujian_pesertas p
                 LEFT JOIN users u ON u.nis = p.nis
-                WHERE p.ujian_id = ?
+                LEFT JOIN kelas k ON k.id = p.kelas_id
+                LEFT JOIN ujian_pengerjaans jp
+                    ON jp.ujian_id = ?
+                   AND jp.nis = p.nis
+                WHERE p.tahun = ?
+                  AND p.lab_kode = ?
+                  AND p.sesi = ?
+                  AND p.gelombang = ?
                 ORDER BY
-                    CASE WHEN p.status = 'submitted' THEN 0 ELSE 1 END,
-                    p.submitted_at DESC,
-                    u.name ASC
-                "#,
+                    p.tahun ASC,
+                    p.lab_kode ASC,
+                    p.sesi ASC,
+                    p.gelombang ASC,
+                    CASE
+                        WHEN COALESCE(jp.status, 'not_started') = 'submitted' THEN 0
+                        WHEN COALESCE(jp.status, 'not_started') = 'started' THEN 1
+                        ELSE 2
+                    END,
+                    k.nama ASC,
+                    u.name ASC,
+                    p.nis ASC
+            "#,
             )
             .bind(ujian_id)
+            .bind(&tahun)
+            .bind(&lab_kode)
+            .bind(sesi)
+            .bind(gelombang)
             .fetch_all(&db)
             .await
             .unwrap_or_else(|e| {
@@ -221,6 +261,9 @@ pub async fn ujian_progress(
 
     let data = UjianProgressData {
         tahun,
+        lab_kode,
+        sesi,
+        gelombang,
         list_ujian,
         active_ujian,
         selected_ujian,

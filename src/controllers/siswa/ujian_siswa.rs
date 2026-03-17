@@ -27,7 +27,6 @@ struct ActiveUjianInfo {
     description: Option<String>,
     waktu_menit: i32,
     total_soal: i32,
-    jurusan: String,
     has_session: bool,
     is_submitted: bool,
 }
@@ -39,7 +38,6 @@ struct ActiveExamRow {
     description: Option<String>,
     waktu_menit: i32,
     total_soal: i32,
-    jurusan: String,
 }
 
 #[derive(FromRow)]
@@ -58,11 +56,6 @@ pub struct TokenForm {
     token: String,
 }
 
-#[derive(FromRow)]
-struct SiswaProfil {
-    jurusan: Option<String>,
-}
-
 pub async fn ujian_gate(
     ctx: PageContext,
     Query(query): Query<GateQuery>,
@@ -77,8 +70,7 @@ pub async fn ujian_gate(
         return render(&ctx, "siswa/ujian/index.html", "Ujian Siswa", data);
     };
 
-    let profil = get_siswa_profil(&db, &nis).await;
-    let data = build_gate_data(&db, &nis, profil.as_ref(), query.message, None).await;
+    let data = build_gate_data(&db, &nis, query.message, None).await;
     render(&ctx, "siswa/ujian/index.html", "Ujian Siswa", data)
 }
 
@@ -97,18 +89,11 @@ pub async fn ujian_konfirmasi_token(
         return Html(page.0).into_response();
     };
 
-    let profil = get_siswa_profil(&db, &nis).await;
-    let jurusan = profil
-        .as_ref()
-        .and_then(|p| p.jurusan.clone())
-        .unwrap_or_else(|| "UMUM".to_string());
-
     let token = payload.token.trim().to_uppercase();
     if token.is_empty() {
         let data = build_gate_data(
             &db,
             &nis,
-            profil.as_ref(),
             None,
             Some("Token ujian tidak boleh kosong.".to_string()),
         )
@@ -124,20 +109,21 @@ pub async fn ujian_konfirmasi_token(
             t.id as token_id,
             t.ujian_id,
             u.title,
-            u.jurusan
+            t.tahun,
+            t.lab_kode,
+            CAST(t.sesi AS SIGNED) as sesi,
+            CAST(t.gelombang AS SIGNED) as gelombang
         FROM ujian_tokens t
         JOIN ujians u ON u.id = t.ujian_id
         WHERE t.token = ?
           AND t.is_active = 1
           AND u.is_active = 1
           AND (t.expired_at IS NULL OR t.expired_at > NOW())
-          AND (u.jurusan = 'UMUM' OR u.jurusan = ?)
           AND u.tahun = ?
         LIMIT 1
         "#,
     )
     .bind(&token)
-    .bind(&jurusan)
     .bind(&tahun)
     .fetch_optional(&db)
     .await
@@ -147,19 +133,51 @@ pub async fn ujian_konfirmasi_token(
         let data = build_gate_data(
             &db,
             &nis,
-            profil.as_ref(),
             None,
-            Some("Token tidak valid, tidak aktif, atau tidak sesuai jurusan Anda.".to_string()),
+            Some("Token tidak valid atau tidak aktif.".to_string()),
         )
         .await;
         let page = render(&ctx, "siswa/ujian/index.html", "Ujian Siswa", data);
         return Html(page.0).into_response();
     };
 
+    let peserta_terdaftar = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT id
+        FROM ujian_pesertas
+        WHERE nis = ?
+          AND tahun = ?
+          AND lab_kode = ?
+          AND sesi = ?
+          AND gelombang = ?
+        LIMIT 1
+        "#,
+    )
+    .bind(&nis)
+    .bind(token_row.tahun.as_deref().unwrap_or(&tahun))
+    .bind(token_row.lab_kode.as_deref().unwrap_or("01"))
+    .bind(token_row.sesi.unwrap_or(1))
+    .bind(token_row.gelombang.unwrap_or(1))
+    .fetch_optional(&db)
+    .await
+    .unwrap_or(None);
+
+    if peserta_terdaftar.is_none() {
+        let data = build_gate_data(
+            &db,
+            &nis,
+            None,
+            Some("Anda belum terdaftar pada grup ujian sesuai token tersebut.".to_string()),
+        )
+        .await;
+        let page = render(&ctx, "siswa/ujian/index.html", "Ujian Siswa", data);
+        return Html(page.0).into_response();
+    }
+
     let peserta_existing = sqlx::query_as::<_, PesertaStatusRow>(
         r#"
         SELECT id, status
-        FROM ujian_pesertas
+        FROM ujian_pengerjaans
         WHERE ujian_id = ? AND nis = ?
         LIMIT 1
         "#,
@@ -178,17 +196,43 @@ pub async fn ujian_konfirmasi_token(
         return Redirect::to(&format!("/siswa/ujian/{}", existing.id)).into_response();
     }
 
+    let kelas_id = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT CAST(kelas_id AS SIGNED) as kelas_id
+        FROM ujian_pesertas
+        WHERE nis = ?
+          AND tahun = ?
+          AND lab_kode = ?
+          AND sesi = ?
+          AND gelombang = ?
+        LIMIT 1
+        "#,
+    )
+    .bind(&nis)
+    .bind(token_row.tahun.as_deref().unwrap_or(&tahun))
+    .bind(token_row.lab_kode.as_deref().unwrap_or("01"))
+    .bind(token_row.sesi.unwrap_or(1))
+    .bind(token_row.gelombang.unwrap_or(1))
+    .fetch_optional(&db)
+    .await
+    .unwrap_or(None);
+
     let inserted = sqlx::query(
         r#"
-        INSERT INTO ujian_pesertas
-            (ujian_id, nis, token_id, status, started_at, last_nomor, created_at, updated_at)
+        INSERT INTO ujian_pengerjaans
+            (ujian_id, nis, token_id, tahun, kelas_id, lab_kode, sesi, gelombang, status, started_at, last_nomor, created_at, updated_at)
         VALUES
-            (?, ?, ?, 'started', NOW(), 1, NOW(), NOW())
+            (?, ?, ?, ?, ?, ?, ?, ?, 'started', NOW(), 1, NOW(), NOW())
         "#,
     )
     .bind(token_row.ujian_id)
     .bind(&nis)
     .bind(token_row.token_id)
+    .bind(token_row.tahun)
+    .bind(kelas_id)
+    .bind(token_row.lab_kode)
+    .bind(token_row.sesi)
+    .bind(token_row.gelombang)
     .execute(&db)
     .await;
 
@@ -201,7 +245,6 @@ pub async fn ujian_konfirmasi_token(
             let data = build_gate_data(
                 &db,
                 &nis,
-                profil.as_ref(),
                 None,
                 Some(format!(
                     "Gagal memulai ujian {}. Silakan coba lagi.",
@@ -220,6 +263,10 @@ struct TokenLookupRow {
     token_id: i64,
     ujian_id: i64,
     title: String,
+    tahun: Option<String>,
+    lab_kode: Option<String>,
+    sesi: Option<i32>,
+    gelombang: Option<i32>,
 }
 
 #[derive(Deserialize)]
@@ -241,6 +288,13 @@ struct UjianSessionData {
 }
 
 #[derive(Serialize)]
+struct TrueFalseStatementView {
+    label: String,
+    text: String,
+    jawaban: Option<String>,
+}
+
+#[derive(Serialize)]
 struct SoalView {
     soal_id: i64,
     pertanyaan: String,
@@ -249,7 +303,7 @@ struct SoalView {
     opsi_b: String,
     opsi_c: String,
     opsi_d: String,
-    opsi_e: String,
+    pernyataan_bs: Vec<TrueFalseStatementView>,
     jawaban_terpilih: Option<String>,
     jawaban_uraian: Option<String>,
 }
@@ -281,7 +335,6 @@ struct SoalSessionRow {
     opsi_b: Option<String>,
     opsi_c: Option<String>,
     opsi_d: Option<String>,
-    opsi_e: Option<String>,
 }
 
 #[derive(FromRow)]
@@ -310,7 +363,7 @@ pub async fn ujian_session_page(
             p.started_at,
             p.last_nomor,
             p.status
-        FROM ujian_pesertas p
+        FROM ujian_pengerjaans p
         JOIN ujians u ON u.id = p.ujian_id
         WHERE p.id = ? AND p.nis = ?
         LIMIT 1
@@ -353,8 +406,6 @@ pub async fn ujian_session_page(
             s.opsi_b,
             s.opsi_c,
             s.opsi_d
-            ,
-            s.opsi_e
         FROM ujian_soals us
         JOIN soals s ON s.id = us.soal_id
         WHERE us.ujian_id = ?
@@ -386,7 +437,7 @@ pub async fn ujian_session_page(
     let nomor_saat_ini = nomor_req.clamp(1, total_soal);
 
     let _ =
-        sqlx::query("UPDATE ujian_pesertas SET last_nomor = ?, updated_at = NOW() WHERE id = ?")
+        sqlx::query("UPDATE ujian_pengerjaans SET last_nomor = ?, updated_at = NOW() WHERE id = ?")
             .bind(nomor_saat_ini)
             .bind(peserta_id)
             .execute(&db)
@@ -405,11 +456,20 @@ pub async fn ujian_session_page(
         opsi_b: s.opsi_b.clone().unwrap_or_default(),
         opsi_c: s.opsi_c.clone().unwrap_or_default(),
         opsi_d: s.opsi_d.clone().unwrap_or_default(),
+        pernyataan_bs: build_true_false_statements(
+            [
+                s.opsi_a.as_deref(),
+                s.opsi_b.as_deref(),
+                s.opsi_c.as_deref(),
+            ],
+            jawaban_map
+                .get(&s.soal_id)
+                .and_then(|j| j.pilihan.as_deref()),
+        ),
         jawaban_terpilih: jawaban_map.get(&s.soal_id).and_then(|j| j.pilihan.clone()),
         jawaban_uraian: jawaban_map
             .get(&s.soal_id)
             .and_then(|j| j.jawaban_uraian.clone()),
-        opsi_e: s.opsi_e.clone().unwrap_or_default(),
     });
 
     let nav = soals
@@ -487,7 +547,7 @@ pub async fn ujian_simpan_jawaban(
     };
 
     let peserta = sqlx::query_as::<_, PesertaOwnerRow>(
-        "SELECT ujian_id, status FROM ujian_pesertas WHERE id = ? AND nis = ? LIMIT 1",
+        "SELECT ujian_id, status FROM ujian_pengerjaans WHERE id = ? AND nis = ? LIMIT 1",
     )
     .bind(peserta_id)
     .bind(&nis)
@@ -523,6 +583,17 @@ pub async fn ujian_simpan_jawaban(
     }
     if let Some(v) = form_map.get("pilihan[]") {
         pilihan_vals.extend(v.iter().cloned());
+    }
+    let mut pilihan_bs_keys = form_map
+        .keys()
+        .filter(|key| key.starts_with("pilihan_bs_"))
+        .cloned()
+        .collect::<Vec<_>>();
+    pilihan_bs_keys.sort();
+    for key in pilihan_bs_keys {
+        if let Some(values) = form_map.get(&key).and_then(|v| v.first()) {
+            pilihan_vals.push(values.clone());
+        }
     }
 
     let pilihan_joined = if pilihan_vals.is_empty() {
@@ -575,7 +646,7 @@ pub async fn ujian_simpan_jawaban(
 
     let nomor_tujuan = nomor_tujuan.unwrap_or(nomor_saat_ini).max(1);
     let _ =
-        sqlx::query("UPDATE ujian_pesertas SET last_nomor = ?, updated_at = NOW() WHERE id = ?")
+        sqlx::query("UPDATE ujian_pengerjaans SET last_nomor = ?, updated_at = NOW() WHERE id = ?")
             .bind(nomor_tujuan)
             .bind(peserta_id)
             .execute(&db)
@@ -628,7 +699,7 @@ pub async fn ujian_submit(
     };
 
     let peserta = sqlx::query_as::<_, PesertaOwnerRow>(
-        "SELECT ujian_id, status FROM ujian_pesertas WHERE id = ? AND nis = ? LIMIT 1",
+        "SELECT ujian_id, status FROM ujian_pengerjaans WHERE id = ? AND nis = ? LIMIT 1",
     )
     .bind(peserta_id)
     .bind(&nis)
@@ -871,7 +942,7 @@ async fn finalize_submission(db: &MySqlPool, ujian_id: i64, nis: &str, peserta_i
         // Update peserta status and total_nilai
         let update_res = sqlx::query(
             r#"
-            UPDATE ujian_pesertas
+            UPDATE ujian_pengerjaans
             SET status = 'submitted',
                 submitted_at = NOW(),
                 total_nilai = ?,
@@ -885,7 +956,7 @@ async fn finalize_submission(db: &MySqlPool, ujian_id: i64, nis: &str, peserta_i
         .await;
         if let Err(e) = update_res {
             eprintln!(
-                "ERROR finalize_submission: update ujian_pesertas failed peserta_id={}, err={:?}",
+                "ERROR finalize_submission: update ujian_pengerjaans failed peserta_id={}, err={:?}",
                 peserta_id, e
             );
         }
@@ -936,7 +1007,7 @@ async fn finalize_submission(db: &MySqlPool, ujian_id: i64, nis: &str, peserta_i
     // Fallback: if no ujian meta, mark submitted and return 0
     let update_res = sqlx::query(
         r#"
-        UPDATE ujian_pesertas
+        UPDATE ujian_pengerjaans
         SET status = 'submitted',
             submitted_at = NOW(),
             total_nilai = 0,
@@ -949,7 +1020,7 @@ async fn finalize_submission(db: &MySqlPool, ujian_id: i64, nis: &str, peserta_i
     .await;
     if let Err(e) = update_res {
         eprintln!(
-            "ERROR finalize_submission: fallback update ujian_pesertas failed peserta_id={}, err={:?}",
+            "ERROR finalize_submission: fallback update ujian_pengerjaans failed peserta_id={}, err={:?}",
             peserta_id, e
         );
     }
@@ -1095,7 +1166,7 @@ async fn simpan_jawaban_opsional(
 
     if kategori == "Pilihan Ganda" {
         let pilihan = pilihan_raw.to_lowercase();
-        if !matches!(pilihan.as_str(), "a" | "b" | "c" | "d" | "e") {
+        if !matches!(pilihan.as_str(), "a" | "b" | "c" | "d") {
             return;
         }
         let is_benar = k
@@ -1150,7 +1221,7 @@ async fn simpan_jawaban_opsional(
         }
         // validate choices
         for s in &selected {
-            if !matches!(s.as_str(), "a" | "b" | "c" | "d" | "e") {
+            if !matches!(s.as_str(), "a" | "b" | "c" | "d") {
                 return;
             }
         }
@@ -1215,17 +1286,40 @@ async fn simpan_jawaban_opsional(
         return;
     }
 
-    if kategori == "Benar/Salah" {
-        let pilihan = pilihan_raw.to_lowercase();
-        if !matches!(pilihan.as_str(), "benar" | "salah") {
+    if kategori == "Pilihan Ganda Kompleks MCMA" {
+        let selected: Vec<String> = pilihan_raw
+            .split(',')
+            .map(|s| s.trim().to_lowercase())
+            .filter(|s| !s.is_empty())
+            .collect();
+        if selected.len() != 2 {
             return;
         }
-        let is_benar = k
+        for s in &selected {
+            if !matches!(s.as_str(), "a" | "b" | "c") {
+                return;
+            }
+        }
+
+        let correct: Vec<String> = k
             .kunci_jawaban
             .as_deref()
-            .map(|v| v.eq_ignore_ascii_case(&pilihan))
-            .unwrap_or(false);
-        let nilai = if is_benar { k.bobot_nilai } else { 0.0 };
+            .unwrap_or("")
+            .split(',')
+            .map(|s| s.trim().to_lowercase())
+            .filter(|s| !s.is_empty())
+            .collect();
+        if correct.len() != 2 {
+            return;
+        }
+
+        let matches = selected
+            .iter()
+            .filter(|choice| correct.iter().any(|answer| answer == *choice))
+            .count();
+        let nilai = (std::cmp::min(matches, 2) as f64 / 2.0) * k.bobot_nilai;
+        let is_benar = matches == 2;
+        let pilihan_store = selected.join(",");
 
         let res = sqlx::query(
             r#"
@@ -1246,7 +1340,86 @@ async fn simpan_jawaban_opsional(
         .bind(ujian_id)
         .bind(nis)
         .bind(soal_id)
-        .bind(pilihan)
+        .bind(pilihan_store)
+        .bind(if is_benar { 1 } else { 0 })
+        .bind(nilai)
+        .execute(db)
+        .await;
+        if let Err(e) = res {
+            eprintln!(
+                "ERROR simpan_jawaban_opsional: failed insert mcma ujian_id={}, nis={}, soal_id={}, err={:?}",
+                ujian_id, nis, soal_id, e
+            );
+        }
+        return;
+    }
+
+    if kategori == "Benar/Salah" {
+        let pilihan_parts: Vec<String> = pilihan_raw
+            .split(',')
+            .map(|part| part.trim().to_lowercase())
+            .filter(|part| !part.is_empty())
+            .collect();
+        if pilihan_parts.is_empty() {
+            return;
+        }
+
+        let kunci_parts: Vec<String> = k
+            .kunci_jawaban
+            .as_deref()
+            .unwrap_or("")
+            .split(',')
+            .map(|part| part.trim().to_lowercase())
+            .filter(|part| !part.is_empty())
+            .collect();
+
+        if pilihan_parts.len() != kunci_parts.len() || kunci_parts.is_empty() {
+            return;
+        }
+
+        let mut correct_count = 0usize;
+        for (jawaban, kunci) in pilihan_parts.iter().zip(kunci_parts.iter()) {
+            if !matches!(jawaban.as_str(), "benar" | "salah")
+                || !matches!(kunci.as_str(), "benar" | "salah")
+            {
+                return;
+            }
+            if jawaban == kunci {
+                correct_count += 1;
+            }
+        }
+
+        let total = kunci_parts.len() as f64;
+        let raw_ratio = correct_count as f64 / total;
+        let ratio = if correct_count == kunci_parts.len() {
+            1.0
+        } else {
+            (raw_ratio * 10.0).floor() / 10.0
+        };
+        let is_benar = correct_count == kunci_parts.len();
+        let nilai = ratio * k.bobot_nilai;
+        let pilihan_store = pilihan_parts.join(",");
+
+        let res = sqlx::query(
+            r#"
+            INSERT INTO ujian_jawabans
+                (ujian_id, nis, soal_id, pilihan, jawaban_uraian, nilai_uraian, status_uraian, is_benar, bobot_nilai, created_at, updated_at)
+            VALUES
+                (?, ?, ?, ?, NULL, 0, NULL, ?, ?, NOW(), NOW())
+            ON DUPLICATE KEY UPDATE
+                pilihan = VALUES(pilihan),
+                jawaban_uraian = NULL,
+                nilai_uraian = 0,
+                status_uraian = NULL,
+                is_benar = VALUES(is_benar),
+                bobot_nilai = VALUES(bobot_nilai),
+                updated_at = NOW()
+            "#,
+        )
+        .bind(ujian_id)
+        .bind(nis)
+        .bind(soal_id)
+        .bind(pilihan_store)
         .bind(if is_benar { 1 } else { 0 })
         .bind(nilai)
         .execute(db)
@@ -1261,17 +1434,51 @@ async fn simpan_jawaban_opsional(
     }
 }
 
+fn build_true_false_statements(
+    options: [Option<&str>; 3],
+    jawaban_terpilih: Option<&str>,
+) -> Vec<TrueFalseStatementView> {
+    let answers: Vec<String> = jawaban_terpilih
+        .unwrap_or("")
+        .split(',')
+        .map(|part| part.trim().to_lowercase())
+        .filter(|part| !part.is_empty())
+        .collect();
+
+    let labels = ["1", "2", "3"];
+    let mut answer_index = 0usize;
+    let mut rows = Vec::new();
+
+    for (label, option) in labels.iter().zip(options.iter()) {
+        let Some(text) = option.and_then(|value| {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        }) else {
+            continue;
+        };
+
+        let jawaban = answers.get(answer_index).cloned();
+        answer_index += 1;
+        rows.push(TrueFalseStatementView {
+            label: (*label).to_string(),
+            text,
+            jawaban,
+        });
+    }
+
+    rows
+}
+
 async fn build_gate_data(
     db: &MySqlPool,
     nis: &str,
-    profil: Option<&SiswaProfil>,
     message: Option<String>,
     error: Option<String>,
 ) -> UjianGateData {
-    let jurusan = profil
-        .and_then(|p| p.jurusan.clone())
-        .unwrap_or_else(|| "UMUM".to_string());
-
     let tahun = data_tahun();
     let active_ujian = sqlx::query_as::<_, ActiveExamRow>(
         r#"
@@ -1280,20 +1487,17 @@ async fn build_gate_data(
             u.title,
             u.description,
             u.waktu_menit,
-            u.total_soal,
-            u.jurusan
+            u.total_soal
         FROM ujians u
         JOIN ujian_tokens t ON t.ujian_id = u.id
         WHERE u.is_active = 1
           AND t.is_active = 1
           AND (t.expired_at IS NULL OR t.expired_at > NOW())
-          AND (u.jurusan = 'UMUM' OR u.jurusan = ?)
           AND u.tahun = ?
         ORDER BY t.created_at DESC
         LIMIT 1
         "#,
     )
-    .bind(&jurusan)
     .bind(&tahun)
     .fetch_optional(db)
     .await
@@ -1301,7 +1505,7 @@ async fn build_gate_data(
 
     let active_ujian = if let Some(exam) = active_ujian {
         let peserta = sqlx::query_as::<_, PesertaStatusRow>(
-            "SELECT id, status FROM ujian_pesertas WHERE ujian_id = ? AND nis = ? LIMIT 1",
+            "SELECT id, status FROM ujian_pengerjaans WHERE ujian_id = ? AND nis = ? LIMIT 1",
         )
         .bind(exam.ujian_id)
         .bind(nis)
@@ -1315,7 +1519,6 @@ async fn build_gate_data(
             description: exam.description,
             waktu_menit: exam.waktu_menit,
             total_soal: exam.total_soal,
-            jurusan: exam.jurusan,
             has_session: peserta.is_some(),
             is_submitted: peserta
                 .as_ref()
@@ -1331,42 +1534,4 @@ async fn build_gate_data(
         message,
         error,
     }
-}
-
-async fn get_siswa_profil(db: &MySqlPool, nis: &str) -> Option<SiswaProfil> {
-    let tahun = data_tahun();
-
-    let by_tahun = sqlx::query_as::<_, SiswaProfil>(
-        r#"
-        SELECT s.nis, k.kode_keahlian as jurusan
-        FROM siswas s
-        JOIN kelas k ON k.id = s.kelas_id
-        WHERE s.nis = ? AND s.tahun = ?
-        LIMIT 1
-        "#,
-    )
-    .bind(nis)
-    .bind(&tahun)
-    .fetch_optional(db)
-    .await
-    .unwrap_or(None);
-
-    if by_tahun.is_some() {
-        return by_tahun;
-    }
-
-    sqlx::query_as::<_, SiswaProfil>(
-        r#"
-        SELECT s.nis, k.kode_keahlian as jurusan
-        FROM siswas s
-        JOIN kelas k ON k.id = s.kelas_id
-        WHERE s.nis = ?
-        ORDER BY s.id DESC
-        LIMIT 1
-        "#,
-    )
-    .bind(nis)
-    .fetch_optional(db)
-    .await
-    .unwrap_or(None)
 }

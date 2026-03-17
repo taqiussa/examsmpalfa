@@ -34,7 +34,34 @@
 <div class="bg-white border border-slate-200 rounded-lg p-4 space-y-3">
         <div class="flex items-center justify-between">
                 <h3 class="text-base font-semibold text-slate-700">Token Ujian</h3>
-                <form hx-post="/ujian/{{ data.selected_ujian.id }}/token" hx-swap="none">
+                <form hx-post="/ujian/{{ data.selected_ujian.id }}/token" hx-swap="none"
+                        class="flex flex-wrap items-end gap-2">
+                        <input type="hidden" name="tahun" value="{{ data.tahun }}">
+                        <div>
+                                <label class="block text-xs text-slate-600 mb-1">Lab</label>
+                                <select name="lab_kode" class="input">
+                                        <option value="01" {% if data.lab_kode == "01" %}selected{% endif %}>Lab Utara (01)</option>
+                                        <option value="02" {% if data.lab_kode == "02" %}selected{% endif %}>Lab Selatan (02)</option>
+                                </select>
+                        </div>
+                        <div>
+                                <label class="block text-xs text-slate-600 mb-1">Sesi</label>
+                                <select name="sesi" class="input">
+                                        <option value="1" {% if data.sesi == 1 %}selected{% endif %}>1</option>
+                                        <option value="2" {% if data.sesi == 2 %}selected{% endif %}>2</option>
+                                        <option value="3" {% if data.sesi == 3 %}selected{% endif %}>3</option>
+                                        <option value="4" {% if data.sesi == 4 %}selected{% endif %}>4</option>
+                                </select>
+                        </div>
+                        <div>
+                                <label class="block text-xs text-slate-600 mb-1">Gelombang</label>
+                                <select name="gelombang" class="input">
+                                        <option value="1" {% if data.gelombang == 1 %}selected{% endif %}>1</option>
+                                        <option value="2" {% if data.gelombang == 2 %}selected{% endif %}>2</option>
+                                        <option value="3" {% if data.gelombang == 3 %}selected{% endif %}>3</option>
+                                        <option value="4" {% if data.gelombang == 4 %}selected{% endif %}>4</option>
+                                </select>
+                        </div>
                         <button type="submit" class="button bg-sky-600 text-white hover:bg-sky-700">
                                 Generate Token
                         </button>
@@ -45,12 +72,20 @@
                 <div class="rounded-md border border-slate-200 px-3 py-2">
                         <div class="font-mono text-lg tracking-wide">{{ t.token }}</div>
                         <div class="text-xs text-slate-500">
+                                {{ t.tahun | default(value=data.tahun) }}
+                                |
+                                {% if t.lab_kode == "02" %}Lab Selatan (02){% else %}Lab Utara (01){% endif %}
+                                | Sesi {{ t.sesi | default(value=1) }}
+                                | Gelombang {{ t.gelombang | default(value=1) }}
+                        </div>
+                        <div class="text-xs text-slate-500">
                                 Dibuat: {{ t.created_at | default(value="-") }}
                                 {% if t.expired_at %} | Exp: {{ t.expired_at }}{% endif %}
                         </div>
                         <div class="mt-2 flex flex-wrap items-center gap-2">
                                 {% if t.is_active == 1 %}
-                                <form hx-post="/ujian/{{ data.selected_ujian.id }}/token/{{ t.id }}/toggle" hx-swap="none">
+                                <form hx-post="/ujian/{{ data.selected_ujian.id }}/token/{{ t.id }}/toggle"
+                                        hx-swap="none">
                                         <input type="hidden" name="active" value="0">
                                         <button type="submit"
                                                 class="rounded-md bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-200">
@@ -58,7 +93,8 @@
                                         </button>
                                 </form>
                                 {% else %}
-                                <form hx-post="/ujian/{{ data.selected_ujian.id }}/token/{{ t.id }}/toggle" hx-swap="none">
+                                <form hx-post="/ujian/{{ data.selected_ujian.id }}/token/{{ t.id }}/toggle"
+                                        hx-swap="none">
                                         <input type="hidden" name="active" value="1">
                                         <button type="submit"
                                                 class="rounded-md bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-200">
@@ -68,8 +104,7 @@
                                 {% endif %}
                                 <button type="button"
                                         class="rounded-md bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-200"
-                                        hx-delete="/ujian/{{ data.selected_ujian.id }}/token/{{ t.id }}"
-                                        hx-swap="none"
+                                        hx-delete="/ujian/{{ data.selected_ujian.id }}/token/{{ t.id }}" hx-swap="none"
                                         hx-confirm="Hapus token ini?">
                                         Hapus
                                 </button>
@@ -94,6 +129,8 @@
                                 <tr>
                                         <th class="border px-2 py-1 text-left">Nama</th>
                                         <th class="border px-2 py-1 text-left">NIS</th>
+                                        <th class="border px-2 py-1 text-left">Kelas</th>
+                                        <th class="border px-2 py-1 text-left">Grup</th>
                                         <th class="border px-2 py-1 text-center">Status</th>
                                         <th class="border px-2 py-1 text-center">Progress</th>
                                         <th class="border px-2 py-1 text-center">Nilai</th>
@@ -104,14 +141,30 @@
                                 <tr>
                                         <td class="border px-2 py-1">{{ h.nama }}</td>
                                         <td class="border px-2 py-1">{{ h.nis | default(value="-") }}</td>
+                                        <td class="border px-2 py-1">{{ h.kelas | default(value="-") }}</td>
+                                        <td class="border px-2 py-1">
+                                                {{ h.tahun | default(value=data.tahun) }}
+                                                /
+                                                {% if h.lab_kode == "02" %}Lab Selatan (02){% else %}Lab Utara (01){%
+                                                endif %}
+                                                / S{{ h.sesi | default(value=1) }}
+                                                / G{{ h.gelombang | default(value=1) }}
+                                        </td>
                                         <td class="border px-2 py-1 text-center">
                                                 {% if h.status == "submitted" %}
-                                                <span class="rounded bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">Submitted</span>
+                                                <span
+                                                        class="rounded bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">Submitted</span>
+                                                {% elif h.status == "started" %}
+                                                <span
+                                                        class="rounded bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">Started</span>
                                                 {% else %}
-                                                <span class="rounded bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">Started</span>
+                                                <span
+                                                        class="rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">Belum Mulai</span>
                                                 {% endif %}
                                         </td>
-                                        <td class="border px-2 py-1 text-center">No. {{ h.last_nomor }}</td>
+                                        <td class="border px-2 py-1 text-center">
+                                                {% if h.last_nomor %}No. {{ h.last_nomor }}{% else %}-{% endif %}
+                                        </td>
                                         <td class="border px-2 py-1 text-center">
                                                 {% if h.status == "submitted" %}
                                                 {{ h.total_nilai | default(value=0) }}
@@ -122,7 +175,7 @@
                                 </tr>
                                 {% else %}
                                 <tr>
-                                        <td colspan="5" class="border px-2 py-3 text-center text-slate-500">
+                                        <td colspan="7" class="border px-2 py-3 text-center text-slate-500">
                                                 Belum ada peserta.
                                         </td>
                                 </tr>

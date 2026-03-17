@@ -1,3 +1,3 @@
 pub mod absensi_kelas;
-pub mod biodata_siswa;
+pub mod data_peserta;
 pub mod ujian;

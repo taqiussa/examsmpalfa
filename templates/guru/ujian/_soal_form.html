@@ -1,423 +1,388 @@
 <div id="soal-form-container" class="card">
+  <div class="flex items-center gap-4">
+    <a href="/ujian/{{ data.ujian_id }}" class="text-slate-500 hover:text-slate-700">
+      ← Kembali ke Ujian
+    </a>
+    <h1 class="card-header">Tambah Soal untuk: {{ data.ujian_title }}</h1>
+  </div>
 
-        <div class="flex items-center gap-4">
-                <a href="/ujian/{{ data.ujian_id }}" class="text-slate-500 hover:text-slate-700">
-                        ← Kembali ke Ujian
-                </a>
-                <h1 class="card-header">Tambah Soal untuk: {{ data.ujian_title }}</h1>
+  <form id="soal-form" method="post" hx-post="/ujian/{{ data.ujian_id }}/soal/store" hx-swap="none">
+    <div class="space-y-2 mb-5">
+      <label class="block text-sm font-medium text-slate-700 mb-1">
+        Pertanyaan <span class="text-rose-500">*</span>
+      </label>
+      <input type="hidden" name="pertanyaan" id="pertanyaan-input" value="{{ data.pertanyaan }}">
+      <div id="quill-editor" class="bg-white" style="height: 180px;"></div>
+    </div>
+
+    <div class="rounded-lg border border-slate-200 bg-slate-50 p-5 space-y-5 mb-5">
+      <div class="text-sm font-semibold text-slate-700">Kunci Jawaban & Kategori</div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Kategori</label>
+          <select id="kategori-select" name="kategori" class="input w-full">
+            <option value="Pilihan Ganda" {% if data.kategori=="Pilihan Ganda" %}selected{% endif %}>Pilihan Ganda
+            </option>
+            <option value="Pilihan Ganda Kompleks" {% if data.kategori=="Pilihan Ganda Kompleks" %}selected{% endif %}>
+              Pilihan Ganda Kompleks</option>
+            <option value="Pilihan Ganda Kompleks MCMA" {% if data.kategori=="Pilihan Ganda Kompleks MCMA" %}selected{% endif %}>
+              Pilihan Ganda Kompleks MCMA</option>
+            <option value="Benar/Salah" {% if data.kategori=="Benar/Salah" %}selected{% endif %}>Benar/Salah</option>
+            <option value="Uraian" {% if data.kategori=="Uraian" %}selected{% endif %}>Uraian</option>
+          </select>
         </div>
 
-        <form id="soal-form" method="post" hx-post="/ujian/{{ data.ujian_id }}/soal/store" hx-swap="none">
+        <div id="kunci-section">
+          <label class="block text-sm font-medium text-slate-700 mb-1">
+            Kunci Jawaban <span class="text-rose-500">*</span>
+          </label>
+          <input type="hidden" name="kunci_jawaban" id="kunci-jawaban-input" value="{{ data.kunci_jawaban }}">
 
-                <!-- Pertanyaan with Quill Editor -->
-                <div class="space-y-2 mb-5">
-                        <label class="block text-sm font-medium text-slate-700 mb-1">
-                                Pertanyaan <span class="text-rose-500">*</span>
-                        </label>
-                        <input type="hidden" name="pertanyaan" id="pertanyaan-input" value="{{ data.pertanyaan }}">
-                        <div id="quill-editor" class="bg-white" style="height: 180px;"></div>
-                </div>
+          <div id="kunci-single">
+            <select id="kunci-single-select" class="input w-full">
+              <option value="a" {% if data.kunci_jawaban=='a' %}selected{% endif %}>A</option>
+              <option value="b" {% if data.kunci_jawaban=='b' %}selected{% endif %}>B</option>
+              <option value="c" {% if data.kunci_jawaban=='c' %}selected{% endif %}>C</option>
+              <option value="d" {% if data.kunci_jawaban=='d' %}selected{% endif %}>D</option>
+            </select>
+          </div>
 
-                <!-- Jawaban Benar & Metadata -->
-                <div class="rounded-lg border border-slate-200 bg-slate-50 p-5 space-y-5 mb-5">
-                        <div class="text-sm font-semibold text-slate-700">Kunci Jawaban & Kategori</div>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div>
-                                        <label class="block text-sm font-medium text-slate-700 mb-1">
-                                                Kategori
-                                        </label>
-                                        <select id="kategori-select" name="kategori" class="input w-full">
-                                                <option value="Pilihan Ganda" {% if data.kategori=="Pilihan Ganda"
-                                                        %}selected{% endif %}>Pilihan Ganda</option>
-                                                <option value="Pilihan Ganda Kompleks" {% if
-                                                        data.kategori=="Pilihan Ganda Kompleks" %}selected{% endif %}>
-                                                        Pilihan Ganda Kompleks</option>
-                                                <option value="Benar/Salah" {% if data.kategori=="Benar/Salah"
-                                                        %}selected{% endif %}>Benar/Salah</option>
-                                                <option value="Uraian" {% if data.kategori=="Uraian" %}selected{% endif
-                                                        %}>Uraian</option>
-                                        </select>
-                                </div>
+          <div id="kunci-kompleks" class="hidden space-y-2">
+            <div class="text-xs text-slate-600" id="kunci-kompleks-help">Pilih tepat 2 kunci dari 4 opsi.</div>
+            <div class="grid grid-cols-4 gap-2 text-sm">
+              <label><input type="checkbox" class="kunci-kompleks-checkbox" value="a"> <span class="kunci-label-a">A</span></label>
+              <label><input type="checkbox" class="kunci-kompleks-checkbox" value="b"> <span class="kunci-label-b">B</span></label>
+              <label><input type="checkbox" class="kunci-kompleks-checkbox" value="c"> <span class="kunci-label-c">C</span></label>
+              <label id="kunci-kompleks-d-label"><input type="checkbox" class="kunci-kompleks-checkbox" value="d"> <span class="kunci-label-d">D</span></label>
+            </div>
+          </div>
 
-                                <div id="kunci-section">
-                                        <label class="block text-sm font-medium text-slate-700 mb-1">
-                                                Kunci Jawaban <span class="text-rose-500">*</span>
-                                        </label>
-                                        <input type="hidden" name="kunci_jawaban" id="kunci-jawaban-input"
-                                                value="{{ data.kunci_jawaban }}">
-                                        <div id="kunci-single">
-                                                <select id="kunci-single-select" class="input w-full">
-                                                        <option value="a" {% if data.kunci_jawaban=='a' %}selected{%
-                                                                endif %}>A</option>
-                                                        <option value="b" {% if data.kunci_jawaban=='b' %}selected{%
-                                                                endif %}>B</option>
-                                                        <option value="c" {% if data.kunci_jawaban=='c' %}selected{%
-                                                                endif %}>C</option>
-                                                        <option value="d" {% if data.kunci_jawaban=='d' %}selected{%
-                                                                endif %}>D</option>
-                                                        <option value="e" {% if data.kunci_jawaban=='e' %}selected{%
-                                                                endif %}>E</option>
-                                                </select>
-                                        </div>
-                                        <div id="kunci-kompleks" class="hidden space-y-2">
-                                                <div class="text-xs text-slate-600">Pilih tepat 2 kunci.</div>
-                                                <div class="grid grid-cols-5 gap-2">
-                                                        <label><input type="checkbox" class="kunci-kompleks-checkbox"
-                                                                        value="a"> A</label>
-                                                        <label><input type="checkbox" class="kunci-kompleks-checkbox"
-                                                                        value="b"> B</label>
-                                                        <label><input type="checkbox" class="kunci-kompleks-checkbox"
-                                                                        value="c"> C</label>
-                                                        <label><input type="checkbox" class="kunci-kompleks-checkbox"
-                                                                        value="d"> D</label>
-                                                        <label><input type="checkbox" class="kunci-kompleks-checkbox"
-                                                                        value="e"> E</label>
-                                                </div>
-                                        </div>
-                                        <div id="kunci-truefalse" class="hidden">
-                                                <select id="kunci-truefalse-select" class="input w-full">
-                                                        <option value="benar" {% if data.kunci_jawaban=='benar'
-                                                                %}selected{% endif %}>Benar</option>
-                                                        <option value="salah" {% if data.kunci_jawaban=='salah'
-                                                                %}selected{% endif %}>Salah</option>
-                                                </select>
-                                        </div>
-                                </div>
+          <div id="kunci-truefalse" class="hidden space-y-3">
+            <div class="text-xs text-slate-600">Pilih kunci untuk setiap pernyataan yang diisi.</div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Pernyataan 1</label>
+                <select class="input w-full tf-key-select" data-index="0">
+                  <option value="benar">Benar</option>
+                  <option value="salah">Salah</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Pernyataan 2</label>
+                <select class="input w-full tf-key-select" data-index="1">
+                  <option value="benar">Benar</option>
+                  <option value="salah">Salah</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Pernyataan 3</label>
+                <select class="input w-full tf-key-select" data-index="2">
+                  <option value="benar">Benar</option>
+                  <option value="salah">Salah</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
 
-                                <div>
-                                        <label class="block text-sm font-medium text-slate-700 mb-1">
-                                                Bobot Nilai
-                                        </label>
-                                        <input type="number" name="bobot_nilai" value="{{ data.bobot_nilai }}" min="1"
-                                                max="100" value="1" class="input w-full">
-                                </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Bobot Nilai</label>
+          <input type="number" step="0.1" name="bobot_nilai" value="{{ data.bobot_nilai }}" min="0.1" max="100"
+            class="input w-full">
+        </div>
+      </div>
+    </div>
 
-                        </div>
-                </div>
+    <div id="opsi-section" class="mb-10 md:mb-20 md:pb-20 space-y-6">
+      <div class="rounded-lg border border-slate-200 px-4 pt-4 pb-20 bg-white">
+        <div class="text-sm font-semibold text-slate-700 mb-3" id="opsi-heading">Opsi Jawaban</div>
+        <div class="md:grid md:grid-cols-2 md:space-y-0 space-y-5 gap-5 md:pb-16 md:mb-16">
+          <div>
+            <label id="label-opsi-a" class="block text-sm font-medium text-slate-700 mb-1">Opsi A</label>
+            <input type="hidden" name="opsi_a" id="opsi-a-input" value="{{ data.opsi_a }}">
+            <div id="opsi-a-editor" class="bg-white opsi-editor"></div>
+          </div>
+          <div>
+            <label id="label-opsi-b" class="block text-sm font-medium text-slate-700 mb-1">Opsi B</label>
+            <input type="hidden" name="opsi_b" id="opsi-b-input" value="{{ data.opsi_b }}">
+            <div id="opsi-b-editor" class="bg-white opsi-editor"></div>
+          </div>
+        </div>
+        <div class="md:grid md:grid-cols-2 md:space-y-0 space-y-5 gap-5 md:pb-16 md:mb-16">
+          <div>
+            <label id="label-opsi-c" class="block text-sm font-medium text-slate-700 mb-1">Opsi C</label>
+            <input type="hidden" name="opsi_c" id="opsi-c-input" value="{{ data.opsi_c }}">
+            <div id="opsi-c-editor" class="bg-white opsi-editor"></div>
+          </div>
+          <div>
+            <label id="label-opsi-d" class="block text-sm font-medium text-slate-700 mb-1">Opsi D</label>
+            <input type="hidden" name="opsi_d" id="opsi-d-input" value="{{ data.opsi_d }}">
+            <div id="opsi-d-editor-wrapper">
+              <div id="opsi-d-editor" class="bg-white opsi-editor"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
-                <!-- Options (Rich text + image) -->
-                <div id="opsi-section" class="mb-10 md:mb-20">
-                        <div id="opsi-block-1"
-                                class="md:grid md:grid-cols-2 md:space-y-0 space-y-5 gap-5 mb-3 py-3 md:mb-20">
-                                <div>
-                                        <label class="block text-sm font-medium text-slate-700 mb-1">
-                                                Opsi A <span class="text-emerald-500">✓</span>
-                                        </label>
-                                        <input type="hidden" name="opsi_a" id="opsi-a-input" value="{{ data.opsi_a }}">
-                                        <div id="opsi-a-editor" class="bg-white opsi-editor"></div>
-                                </div>
-
-                                <div>
-                                        <label class="block text-sm font-medium text-slate-700 mb-1">
-                                                Opsi B
-                                        </label>
-                                        <input type="hidden" name="opsi_b" id="opsi-b-input" value="{{ data.opsi_b }}">
-                                        <div id="opsi-b-editor" class="bg-white opsi-editor"></div>
-                                </div>
-                        </div>
-
-                        <div id="opsi-block-2"
-                                class="md:grid md:grid-cols-2 md:space-y-0 space-y-5 gap-5 mb-3 py-3 md:mb-20">
-                                <div>
-                                        <label class="block text-sm font-medium text-slate-700 mb-1">
-                                                Opsi C
-                                        </label>
-                                        <input type="hidden" name="opsi_c" id="opsi-c-input" value="{{ data.opsi_c }}">
-                                        <div id="opsi-c-editor" class="bg-white opsi-editor"></div>
-                                </div>
-
-                                <div>
-                                        <label class="block text-sm font-medium text-slate-700 mb-1">
-                                                Opsi D
-                                        </label>
-                                        <input type="hidden" name="opsi_d" id="opsi-d-input" value="{{ data.opsi_d }}">
-                                        <div id="opsi-d-editor" class="bg-white opsi-editor"></div>
-                                </div>
-                        </div>
-                        <div id="opsi-block-3" class="md:grid md:grid-cols-2 md:space-y-0 space-y-5 gap-5 mb-3 py-3">
-                                <div>
-                                        <label class="block text-sm font-medium text-slate-700 mb-1">
-                                                Opsi E
-                                        </label>
-                                        <input type="hidden" name="opsi_e" id="opsi-e-input" value="{{ data.opsi_e }}">
-                                        <div id="opsi-e-editor" class="bg-white opsi-editor"></div>
-                                </div>
-                        </div>
-                </div>
-
-                <!-- Submit Buttons -->
-                <div class="flex items-center justify-end gap-3 pt-4 border-t">
-                        <a href="/ujian/{{ data.ujian_id }}"
-                                class="button bg-slate-100 text-slate-700 hover:bg-slate-200">
-                                Batal
-                        </a>
-                        <button type="submit" class="button bg-sky-600 text-white hover:bg-sky-700">
-                                Simpan Soal
-                        </button>
-                </div>
-
-        </form>
-
+    <div class="flex items-center justify-end gap-3 pt-4 border-t">
+      <a href="/ujian/{{ data.ujian_id }}" class="button bg-slate-100 text-slate-700 hover:bg-slate-200">
+        Batal
+      </a>
+      <button type="submit" class="button bg-sky-600 text-white hover:bg-sky-700">
+        Simpan Soal
+      </button>
+    </div>
+  </form>
 </div>
 
-<!-- Quill.js CDN -->
 <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
 <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
 
 <script>
-        document.addEventListener('DOMContentLoaded', function () {
-                var uploadUrl = "/ujian/{{ data.ujian_id }}/upload-image";
-                var kategoriSelect = document.getElementById('kategori-select');
-                var opsiSection = document.getElementById('opsi-section');
-                var kunciSection = document.getElementById('kunci-section');
+  document.addEventListener('DOMContentLoaded', function () {
+    var uploadUrl = "/ujian/{{ data.ujian_id }}/upload-image";
+    var kategoriSelect = document.getElementById('kategori-select');
+    var opsiSection = document.getElementById('opsi-section');
+    var kunciSection = document.getElementById('kunci-section');
+    var kunciJawabanInput = document.getElementById('kunci-jawaban-input');
+    var form = document.getElementById('soal-form');
 
-                function handleImageUpload(quill, context) {
-                        var input = document.createElement('input');
-                        input.setAttribute('type', 'file');
-                        input.setAttribute('accept', 'image/*');
-                        input.click();
+    function handleImageUpload(quill, context) {
+      var input = document.createElement('input');
+      input.setAttribute('type', 'file');
+      input.setAttribute('accept', 'image/*');
+      input.click();
 
-                        input.onchange = async function () {
-                                if (!input.files || !input.files[0]) {
-                                        return;
-                                }
+      input.onchange = async function () {
+        if (!input.files || !input.files[0]) return;
+        var formData = new FormData();
+        formData.append('context', context);
+        formData.append('image', input.files[0]);
 
-                                var formData = new FormData();
-                                if (context) {
-                                        formData.append('context', context);
-                                }
-                                formData.append('image', input.files[0]);
+        try {
+          var res = await fetch(uploadUrl, {
+            method: 'POST',
+            body: formData,
+            headers: { 'HX-Request': 'true' }
+          });
 
-                                try {
-                                        var res = await fetch(uploadUrl, {
-                                                method: 'POST',
-                                                body: formData,
-                                                headers: {
-                                                        'HX-Request': 'true'
-                                                }
-                                        });
+          if (!res.ok) {
+            alert('Gagal upload gambar. Periksa ukuran/format.');
+            return;
+          }
 
-                                        if (!res.ok) {
-                                                alert('Gagal upload gambar. Periksa ukuran/format.');
-                                                return;
-                                        }
+          var data = await res.json();
+          var range = quill.getSelection(true);
+          quill.insertEmbed(range.index, 'image', data.url);
+          quill.setSelection(range.index + 1);
+        } catch (err) {
+          console.error(err);
+          alert('Gagal upload gambar.');
+        }
+      };
+    }
 
-                                        var data = await res.json();
-                                        var range = quill.getSelection(true);
-                                        quill.insertEmbed(range.index, 'image', data.url);
-                                        quill.setSelection(range.index + 1);
-                                } catch (err) {
-                                        console.error(err);
-                                        alert('Gagal upload gambar.');
-                                }
-                        };
-                }
+    function buildQuill(selector, placeholder, context) {
+      return new Quill(selector, {
+        theme: 'snow',
+        placeholder: placeholder,
+        modules: {
+          toolbar: {
+            container: [
+              [{ 'header': [1, 2, 3, false] }],
+              ['bold', 'italic', 'underline', 'strike'],
+              [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+              ['link', 'image'],
+              ['clean']
+            ],
+            handlers: {
+              image: function () {
+                handleImageUpload(this.quill, context);
+              }
+            }
+          }
+        }
+      });
+    }
 
-                function buildQuill(selector, placeholder, context) {
-                        return new Quill(selector, {
-                                theme: 'snow',
-                                placeholder: placeholder,
-                                modules: {
-                                        toolbar: {
-                                                container: [
-                                                        [{ 'header': [1, 2, 3, false] }],
-                                                        ['bold', 'italic', 'underline', 'strike'],
-                                                        [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-                                                        ['link', 'image'],
-                                                        ['clean']
-                                                ],
-                                                handlers: {
-                                                        image: function () {
-                                                                handleImageUpload(this.quill, context);
-                                                        }
-                                                }
-                                        }
-                                }
-                        });
-                }
+    var quillPertanyaan = buildQuill('#quill-editor', 'Ketik pertanyaan di sini...', 'pertanyaan');
+    var quillA = buildQuill('#opsi-a-editor', 'Isi bagian A', 'opsi_a');
+    var quillB = buildQuill('#opsi-b-editor', 'Isi bagian B', 'opsi_b');
+    var quillC = buildQuill('#opsi-c-editor', 'Isi bagian C', 'opsi_c');
+    var quillD = buildQuill('#opsi-d-editor', 'Isi bagian D', 'opsi_d');
 
-                var quillPertanyaan = buildQuill('#quill-editor', 'Ketik pertanyaan di sini...', 'pertanyaan');
-                var quillA = buildQuill('#opsi-a-editor', 'Jawaban opsi A', 'opsi_a');
-                var quillB = buildQuill('#opsi-b-editor', 'Jawaban opsi B', 'opsi_b');
-                var quillC = buildQuill('#opsi-c-editor', 'Jawaban opsi C', 'opsi_c');
-                var quillD = buildQuill('#opsi-d-editor', 'Jawaban opsi D', 'opsi_d');
-                var quillE = buildQuill('#opsi-e-editor', 'Jawaban opsi E', 'opsi_e');
+    var pertanyaanInput = document.getElementById('pertanyaan-input');
+    var opsiAInput = document.getElementById('opsi-a-input');
+    var opsiBInput = document.getElementById('opsi-b-input');
+    var opsiCInput = document.getElementById('opsi-c-input');
+    var opsiDInput = document.getElementById('opsi-d-input');
 
-                var pertanyaanInput = document.getElementById('pertanyaan-input');
-                var opsiAInput = document.getElementById('opsi-a-input');
-                var opsiBInput = document.getElementById('opsi-b-input');
-                var opsiCInput = document.getElementById('opsi-c-input');
-                var opsiDInput = document.getElementById('opsi-d-input');
-                var opsiEInput = document.getElementById('opsi-e-input');
+    function setInitial(quill, input) {
+      if (input && input.value) {
+        quill.root.innerHTML = input.value;
+      }
+    }
 
-                function setInitial(quill, input) {
-                        if (input && input.value) {
-                                quill.root.innerHTML = input.value;
-                        }
-                }
+    setInitial(quillPertanyaan, pertanyaanInput);
+    setInitial(quillA, opsiAInput);
+    setInitial(quillB, opsiBInput);
+    setInitial(quillC, opsiCInput);
+    setInitial(quillD, opsiDInput);
 
-                setInitial(quillPertanyaan, pertanyaanInput);
-                setInitial(quillA, opsiAInput);
-                setInitial(quillB, opsiBInput);
-                setInitial(quillC, opsiCInput);
-                setInitial(quillD, opsiDInput);
-                setInitial(quillE, opsiEInput);
+    function syncInputs() {
+      pertanyaanInput.value = quillPertanyaan.root.innerHTML;
+      opsiAInput.value = quillA.root.innerHTML;
+      opsiBInput.value = quillB.root.innerHTML;
+      opsiCInput.value = quillC.root.innerHTML;
+      opsiDInput.value = quillD.root.innerHTML;
+    }
 
-                var form = document.getElementById('soal-form');
-                function syncInputs() {
-                        pertanyaanInput.value = quillPertanyaan.root.innerHTML;
-                        opsiAInput.value = quillA.root.innerHTML;
-                        opsiBInput.value = quillB.root.innerHTML;
-                        opsiCInput.value = quillC.root.innerHTML;
-                        opsiDInput.value = quillD.root.innerHTML;
-                        opsiEInput.value = quillE.root.innerHTML;
-                }
+    function visibleStatementValues() {
+      syncInputs();
+      return [opsiAInput.value, opsiBInput.value, opsiCInput.value].filter(function (value) {
+        return value.replace(/<[^>]*>/g, '').trim() !== '';
+      });
+    }
 
-                function toggleKategori() {
-                        if (!kategoriSelect || !opsiSection || !kunciSection) {
-                                return;
-                        }
-                        var kunciSelect = kunciSection.querySelector('select');
-                        if (kategoriSelect.value === 'Uraian') {
-                                opsiSection.classList.add('hidden');
-                                kunciSection.classList.add('hidden');
-                                if (kunciSelect) {
-                                        kunciSelect.disabled = true;
-                                        kunciSelect.required = false;
-                                }
-                        } else if (kategoriSelect.value === 'Benar/Salah') {
-                                // For True/False we don't need opsi inputs — hide opsi section
-                                opsiSection.classList.add('hidden');
-                                kunciSection.classList.remove('hidden');
-                                var kunciSingle = document.getElementById('kunci-single');
-                                var kunciKompleks = document.getElementById('kunci-kompleks');
-                                var kunciTF = document.getElementById('kunci-truefalse');
-                                if (kunciSingle) kunciSingle.classList.add('hidden');
-                                if (kunciKompleks) kunciKompleks.classList.add('hidden');
-                                if (kunciTF) kunciTF.classList.remove('hidden');
-                                if (kunciSelect) kunciSelect.disabled = false;
-                        } else {
-                                opsiSection.classList.remove('hidden');
-                                kunciSection.classList.remove('hidden');
-                                var block1 = document.getElementById('opsi-block-1');
-                                var block2 = document.getElementById('opsi-block-2');
-                                var block3 = document.getElementById('opsi-block-3');
-                                if (block1) block1.classList.remove('hidden');
-                                if (block2) block2.classList.remove('hidden');
-                                if (block3) block3.classList.remove('hidden');
-                                // show appropriate kunci control
-                                var kunciSingle = document.getElementById('kunci-single');
-                                var kunciKompleks = document.getElementById('kunci-kompleks');
-                                var kunciTF = document.getElementById('kunci-truefalse');
-                                var kunciInputHidden = document.getElementById('kunci-jawaban-input');
-                                if (kategoriSelect.value === 'Pilihan Ganda') {
-                                        if (kunciSingle) kunciSingle.classList.remove('hidden');
-                                        if (kunciKompleks) kunciKompleks.classList.add('hidden');
-                                        if (kunciTF) kunciTF.classList.add('hidden');
-                                } else if (kategoriSelect.value === 'Pilihan Ganda Kompleks') {
-                                        if (kunciSingle) kunciSingle.classList.add('hidden');
-                                        if (kunciKompleks) kunciKompleks.classList.remove('hidden');
-                                        if (kunciTF) kunciTF.classList.add('hidden');
-                                } else if (kategoriSelect.value === 'Benar/Salah') {
-                                        if (kunciSingle) kunciSingle.classList.add('hidden');
-                                        if (kunciKompleks) kunciKompleks.classList.add('hidden');
-                                        if (kunciTF) kunciTF.classList.remove('hidden');
-                                } else {
-                                        if (kunciSingle) kunciSingle.classList.remove('hidden');
-                                        if (kunciKompleks) kunciKompleks.classList.add('hidden');
-                                        if (kunciTF) kunciTF.classList.add('hidden');
-                                }
-                                if (kunciInputHidden) {
-                                        kunciInputHidden.disabled = false;
-                                }
-                        }
-                }
+    function hydrateInitialKeys() {
+      var raw = (kunciJawabanInput.value || '').split(',').map(function (item) {
+        return item.trim().toLowerCase();
+      }).filter(Boolean);
 
-                form.addEventListener('submit', syncInputs);
-                form.addEventListener('htmx:beforeRequest', syncInputs);
+      document.querySelectorAll('.kunci-kompleks-checkbox').forEach(function (checkbox) {
+        checkbox.checked = raw.indexOf(checkbox.value) !== -1;
+      });
 
-                // populate hidden kunci input before submit
-                form.addEventListener('submit', function (e) {
-                        var kategori = kategoriSelect ? kategoriSelect.value : '';
-                        var hidden = document.getElementById('kunci-jawaban-input');
-                        if (!hidden) return;
-                        if (kategori === 'Pilihan Ganda') {
-                                var sel = document.getElementById('kunci-single-select');
-                                hidden.value = sel ? sel.value : '';
-                        } else if (kategori === 'Pilihan Ganda Kompleks') {
-                                var checks = Array.from(document.querySelectorAll('.kunci-kompleks-checkbox:checked'));
-                                if (checks.length !== 2) {
-                                        e.preventDefault();
-                                        alert('Pilih tepat 2 kunci jawaban.');
-                                        return;
-                                }
-                                hidden.value = checks.map(c => c.value).join(',');
-                        } else if (kategori === 'Benar/Salah') {
-                                var sel = document.getElementById('kunci-truefalse-select');
-                                hidden.value = sel ? sel.value : '';
-                        }
-                });
+      document.querySelectorAll('.tf-key-select').forEach(function (select, idx) {
+        if (raw[idx]) {
+          select.value = raw[idx];
+        }
+      });
+    }
 
-                if (kategoriSelect) {
-                        kategoriSelect.addEventListener('change', toggleKategori);
-                        toggleKategori();
-                }
+    function syncKunciJawaban() {
+      var kategori = kategoriSelect ? kategoriSelect.value : '';
+      if (kategori === 'Pilihan Ganda') {
+        var single = document.getElementById('kunci-single-select');
+        kunciJawabanInput.value = single ? single.value : 'a';
+        return;
+      }
 
-                // Clear form when a soal is created (triggered by server via HX-Trigger)
-                document.addEventListener('soal:created', function () {
-                        // clear quill editors
-                        quillPertanyaan.root.innerHTML = '';
-                        quillA.root.innerHTML = '';
-                        quillB.root.innerHTML = '';
-                        quillC.root.innerHTML = '';
-                        quillD.root.innerHTML = '';
-                        quillE.root.innerHTML = '';
-                        // clear hidden inputs
-                        pertanyaanInput.value = '';
-                        opsiAInput.value = '';
-                        opsiBInput.value = '';
-                        opsiCInput.value = '';
-                        opsiDInput.value = '';
-                        opsiEInput.value = '';
-                        // reset kunci inputs
-                        var kSingle = document.getElementById('kunci-single-select');
-                        if (kSingle) kSingle.selectedIndex = 0;
-                        var kTF = document.getElementById('kunci-truefalse-select');
-                        if (kTF) kTF.selectedIndex = 0;
-                        var checks = document.querySelectorAll('.kunci-kompleks-checkbox');
-                        checks.forEach(c => c.checked = false);
-                        // reset bobot
-                        var bobot = document.querySelector('input[name="bobot_nilai"]');
-                        if (bobot) bobot.value = 1;
-                });
+      if (kategori === 'Pilihan Ganda Kompleks' || kategori === 'Pilihan Ganda Kompleks MCMA') {
+        var selected = Array.from(document.querySelectorAll('.kunci-kompleks-checkbox:checked')).map(function (checkbox) {
+          return checkbox.value;
         });
+        kunciJawabanInput.value = selected.join(',');
+        return;
+      }
+
+      if (kategori === 'Benar/Salah') {
+        var activeStatements = visibleStatementValues();
+        var keys = Array.from(document.querySelectorAll('.tf-key-select')).slice(0, activeStatements.length).map(function (select) {
+          return select.value;
+        });
+        kunciJawabanInput.value = keys.join(',');
+        return;
+      }
+
+      kunciJawabanInput.value = '';
+    }
+
+    function updateOptionLabels() {
+      var isTf = kategoriSelect && kategoriSelect.value === 'Benar/Salah';
+      var isMcma = kategoriSelect && kategoriSelect.value === 'Pilihan Ganda Kompleks MCMA';
+      document.getElementById('opsi-heading').textContent = isTf ? 'Pernyataan Benar / Salah' : 'Opsi Jawaban';
+      if (isTf || isMcma) {
+        document.getElementById('opsi-heading').textContent = isTf ? 'Pernyataan Benar / Salah' : 'Pernyataan MCMA';
+        document.getElementById('label-opsi-a').textContent = 'Pernyataan 1';
+        document.getElementById('label-opsi-b').textContent = 'Pernyataan 2';
+        document.getElementById('label-opsi-c').textContent = 'Pernyataan 3';
+        document.getElementById('label-opsi-d').textContent = 'Tidak digunakan';
+      } else {
+        document.getElementById('label-opsi-a').textContent = 'Opsi A';
+        document.getElementById('label-opsi-b').textContent = 'Opsi B';
+        document.getElementById('label-opsi-c').textContent = 'Opsi C';
+        document.getElementById('label-opsi-d').textContent = 'Opsi D';
+      }
+    }
+
+    function toggleKategori() {
+      if (!kategoriSelect || !opsiSection || !kunciSection) return;
+      var kategori = kategoriSelect.value;
+      var kunciSingle = document.getElementById('kunci-single');
+      var kunciKompleks = document.getElementById('kunci-kompleks');
+      var kunciTF = document.getElementById('kunci-truefalse');
+      var opsiDWrapper = document.getElementById('opsi-d-editor-wrapper');
+      var opsiDInput = document.getElementById('opsi-d-input');
+      var kompleksHelp = document.getElementById('kunci-kompleks-help');
+      var kompleksD = document.getElementById('kunci-kompleks-d-label');
+
+      updateOptionLabels();
+
+      if (kategori === 'Uraian') {
+        opsiSection.classList.add('hidden');
+        kunciSection.classList.add('hidden');
+      } else {
+        opsiSection.classList.remove('hidden');
+        kunciSection.classList.remove('hidden');
+        kunciSingle.classList.toggle('hidden', kategori !== 'Pilihan Ganda');
+        kunciKompleks.classList.toggle('hidden', kategori !== 'Pilihan Ganda Kompleks' && kategori !== 'Pilihan Ganda Kompleks MCMA');
+        kunciTF.classList.toggle('hidden', kategori !== 'Benar/Salah');
+        if (opsiDWrapper) {
+          opsiDWrapper.classList.toggle('hidden', kategori === 'Benar/Salah' || kategori === 'Pilihan Ganda Kompleks MCMA');
+        }
+        if (opsiDInput && (kategori === 'Benar/Salah' || kategori === 'Pilihan Ganda Kompleks MCMA')) {
+          opsiDInput.value = '';
+        }
+        if (kompleksHelp) {
+          kompleksHelp.textContent = kategori === 'Pilihan Ganda Kompleks MCMA'
+            ? 'Pilih tepat 2 kunci benar dari 3 pernyataan.'
+            : 'Pilih tepat 2 kunci dari 4 opsi.';
+        }
+        if (kompleksD) {
+          kompleksD.classList.toggle('hidden', kategori === 'Pilihan Ganda Kompleks MCMA');
+        }
+      }
+
+      syncKunciJawaban();
+    }
+
+    hydrateInitialKeys();
+    toggleKategori();
+
+    if (kategoriSelect) {
+      kategoriSelect.addEventListener('change', toggleKategori);
+    }
+
+    document.getElementById('kunci-single-select').addEventListener('change', syncKunciJawaban);
+    document.querySelectorAll('.kunci-kompleks-checkbox').forEach(function (checkbox) {
+      checkbox.addEventListener('change', function () {
+        var checked = Array.from(document.querySelectorAll('.kunci-kompleks-checkbox:checked'));
+        if (checked.length > 2) {
+          checkbox.checked = false;
+          alert('Pilih tepat maksimal 2 kunci.');
+          return;
+        }
+        syncKunciJawaban();
+      });
+    });
+    document.querySelectorAll('.tf-key-select').forEach(function (select) {
+      select.addEventListener('change', syncKunciJawaban);
+    });
+
+    [quillPertanyaan, quillA, quillB, quillC, quillD].forEach(function (quill) {
+      quill.on('text-change', function () {
+        syncInputs();
+        syncKunciJawaban();
+      });
+    });
+
+    if (form) {
+      form.addEventListener('submit', function () {
+        syncInputs();
+        syncKunciJawaban();
+      });
+    }
+  });
 </script>
-
-<style>
-        /* Quill overrides for Tailwind compatibility */
-        .ql-toolbar {
-                border-radius: 0.375rem 0.375rem 0 0;
-                border-color: #e2e8f0 !important;
-                background-color: #f8fafc;
-        }
-
-        .ql-container {
-                border-radius: 0 0 0.375rem 0.375rem;
-                border-color: #e2e8f0 !important;
-                font-family: inherit;
-                font-size: 0.875rem;
-        }
-
-        .ql-editor {
-                min-height: 140px;
-        }
-
-        .opsi-editor .ql-editor {
-                min-height: 80px;
-        }
-
-        .ql-editor.ql-blank::before {
-                color: #94a3b8;
-                font-style: normal;
-        }
-</style>

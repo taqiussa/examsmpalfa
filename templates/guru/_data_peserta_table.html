@@ -5,12 +5,10 @@
                         <th class="border px-2 py-2">NIS</th>
                         <th class="border px-2 py-2">Nama</th>
                         <th class="border px-2 py-2">Kelas</th>
-                        <th class="border px-2 py-2">Tingkat</th>
-                        <th class="border px-2 py-2">TTL</th>
-                        <th class="border px-2 py-2">Ayah</th>
-                        <th class="border px-2 py-2">Ibu</th>
-                        <th class="border px-2 py-2">Alamat</th>
-                        <th class="border px-2 py-2">Telepon</th>
+                        <th class="border px-2 py-2 text-center">Tahun</th>
+                        <th class="border px-2 py-2 text-center">Gelombang</th>
+                        <th class="border px-2 py-2">Lab</th>
+                        <th class="border px-2 py-2 text-center">Sesi</th>
                 </tr>
         </thead>
 
@@ -23,20 +21,23 @@
                         <td class="border px-2 py-1">{{ s.nis | default(value="-") }}</td>
                         <td class="border px-2 py-1">{{ s.nama | default(value="-") }}</td>
                         <td class="border px-2 py-1">{{ s.kelas | default(value="-") }}</td>
-                        <td class="border px-2 py-1">{{ s.tingkat | default(value="-") }}</td>
+                        <td class="border px-2 py-1 text-center">{{ s.tahun }}</td>
+                        <td class="border px-2 py-1 text-center">{{ s.gelombang }}</td>
                         <td class="border px-2 py-1">
-                                {{ s.tempat_lahir | default(value="-") }},
-                                {{ s.tanggal_lahir | default(value="-") }}
+                                {% if s.lab_kode == "02" %}
+                                Lab Selatan (02)
+                                {% elif s.lab_kode == "01" %}
+                                Lab Utara (01)
+                                {% else %}
+                                {{ s.lab_kode }}
+                                {% endif %}
                         </td>
-                        <td class="border px-2 py-1">{{ s.nama_ayah | default(value="-") }}</td>
-                        <td class="border px-2 py-1">{{ s.nama_ibu | default(value="-") }}</td>
-                        <td class="border px-2 py-1">{{ s.alamat_lengkap | default(value="-") }}</td>
-                        <td class="border px-2 py-1">{{ s.telepon | default(value="-") }}</td>
+                        <td class="border px-2 py-1 text-center">{{ s.sesi }}</td>
                 </tr>
                 {% else %}
                 <tr>
-                        <td colspan="10" class="border px-3 py-4 text-center text-slate-500">
-                                Tidak ada data siswa
+                        <td colspan="8" class="border px-3 py-4 text-center text-slate-500">
+                                Tidak ada data peserta
                         </td>
                 </tr>
                 {% endfor %}
