@@ -9,12 +9,8 @@
                 </div>
         </div>
 
-        <div id="active-ujian-panel"
-                hx-get="/progress-ujian/active-panel"
-                hx-include="#progress-filter"
-                hx-trigger="refresh-active from:body"
-                hx-swap="innerHTML"
-                hx-indicator="#progress-loading">
+        <div id="active-ujian-panel" hx-get="/progress-ujian/active-panel" hx-include="#progress-filter"
+                hx-trigger="refresh-active from:body" hx-swap="innerHTML" hx-indicator="#progress-loading">
                 {% include "guru/ujian/_active_ujian_panel.html" %}
         </div>
 
@@ -26,23 +22,18 @@
 
         <div id="progress-loading" class="hidden text-sm text-slate-500">Memuat progress...</div>
 
-        <form id="progress-filter" class="flex flex-wrap items-end gap-3"
-                method="get"
-                action="/progress-ujian"
-                hx-get="/progress-ujian"
-                hx-target="#progress-content"
-                hx-swap="innerHTML"
-                hx-push-url="true"
-                hx-indicator="#progress-loading"
-                hx-trigger="change from:select">
+        <form id="progress-filter" class="flex flex-wrap items-end gap-3" method="get" action="/progress-ujian"
+                hx-get="/progress-ujian" hx-target="#progress-content" hx-swap="innerHTML" hx-push-url="true"
+                hx-indicator="#progress-loading" hx-trigger="change from:select">
                 {% include "components/tahun.html" %}
                 <div class="flex-1 min-w-[240px]">
                         <label class="block text-sm text-slate-600 mb-1">Ujian (Mata Pelajaran)</label>
                         <select name="ujian_id" class="input">
                                 <option value="">Pilih ujian...</option>
                                 {% for u in data.list_ujian %}
-                                <option value="{{ u.id }}" {% if u.id == selected_id %}selected{% endif %}>
-                                        {{ u.mata_pelajaran | default(value="-") }} - {{ u.title }}{% if u.is_active == 1 %} (Aktif){% endif %}
+                                <option value="{{ u.id }}" {% if u.id==selected_id %}selected{% endif %}>
+                                        {{ u.mata_pelajaran | default(value="-") }} - {{ u.title }}{% if u.is_active ==
+                                        1 %} (Aktif){% endif %}
                                 </option>
                                 {% endfor %}
                         </select>
@@ -50,36 +41,32 @@
                 <div class="min-w-[180px]">
                         <label class="block text-sm text-slate-600 mb-1">Lab</label>
                         <select name="lab_kode" class="input">
-                                <option value="01" {% if data.lab_kode == "01" %}selected{% endif %}>Lab Utara (01)</option>
-                                <option value="02" {% if data.lab_kode == "02" %}selected{% endif %}>Lab Selatan (02)</option>
+                                <option value="01" {% if data.lab_kode=="01" %}selected{% endif %}>Lab Utara (01)
+                                </option>
+                                <option value="02" {% if data.lab_kode=="02" %}selected{% endif %}>Lab Selatan (02)
+                                </option>
                         </select>
                 </div>
                 <div class="min-w-[120px]">
                         <label class="block text-sm text-slate-600 mb-1">Sesi</label>
                         <select name="sesi" class="input">
-                                <option value="1" {% if data.sesi == 1 %}selected{% endif %}>1</option>
-                                <option value="2" {% if data.sesi == 2 %}selected{% endif %}>2</option>
-                                <option value="3" {% if data.sesi == 3 %}selected{% endif %}>3</option>
-                                <option value="4" {% if data.sesi == 4 %}selected{% endif %}>4</option>
+                                <option value="1" {% if data.sesi==1 %}selected{% endif %}>1</option>
+                                <option value="2" {% if data.sesi==2 %}selected{% endif %}>2</option>
+                                <option value="3" {% if data.sesi==3 %}selected{% endif %}>3</option>
+                                <option value="4" {% if data.sesi==4 %}selected{% endif %}>4</option>
                         </select>
                 </div>
                 <div class="min-w-[140px]">
                         <label class="block text-sm text-slate-600 mb-1">Gelombang</label>
                         <select name="gelombang" class="input">
-                                <option value="1" {% if data.gelombang == 1 %}selected{% endif %}>1</option>
-                                <option value="2" {% if data.gelombang == 2 %}selected{% endif %}>2</option>
-                                <option value="3" {% if data.gelombang == 3 %}selected{% endif %}>3</option>
-                                <option value="4" {% if data.gelombang == 4 %}selected{% endif %}>4</option>
+                                <option value="3" {% if data.gelombang==3 %}selected{% endif %}>3</option>
+                                <option value="4" {% if data.gelombang==4 %}selected{% endif %}>4</option>
                         </select>
                 </div>
         </form>
 
-        <div id="progress-content"
-                hx-get="/progress-ujian"
-                hx-include="#progress-filter"
-                hx-trigger="refresh-progress from:body"
-                hx-swap="innerHTML"
-                hx-indicator="#progress-loading">
+        <div id="progress-content" hx-get="/progress-ujian" hx-include="#progress-filter"
+                hx-trigger="refresh-progress from:body" hx-swap="innerHTML" hx-indicator="#progress-loading">
                 {% include "guru/ujian/_progress_content.html" %}
         </div>
 </div>

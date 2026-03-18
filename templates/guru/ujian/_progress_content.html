@@ -40,26 +40,26 @@
                         <div>
                                 <label class="block text-xs text-slate-600 mb-1">Lab</label>
                                 <select name="lab_kode" class="input">
-                                        <option value="01" {% if data.lab_kode == "01" %}selected{% endif %}>Lab Utara (01)</option>
-                                        <option value="02" {% if data.lab_kode == "02" %}selected{% endif %}>Lab Selatan (02)</option>
+                                        <option value="01" {% if data.lab_kode=="01" %}selected{% endif %}>Lab Utara
+                                                (01)</option>
+                                        <option value="02" {% if data.lab_kode=="02" %}selected{% endif %}>Lab Selatan
+                                                (02)</option>
                                 </select>
                         </div>
                         <div>
                                 <label class="block text-xs text-slate-600 mb-1">Sesi</label>
                                 <select name="sesi" class="input">
-                                        <option value="1" {% if data.sesi == 1 %}selected{% endif %}>1</option>
-                                        <option value="2" {% if data.sesi == 2 %}selected{% endif %}>2</option>
-                                        <option value="3" {% if data.sesi == 3 %}selected{% endif %}>3</option>
-                                        <option value="4" {% if data.sesi == 4 %}selected{% endif %}>4</option>
+                                        <option value="1" {% if data.sesi==1 %}selected{% endif %}>1</option>
+                                        <option value="2" {% if data.sesi==2 %}selected{% endif %}>2</option>
+                                        <option value="3" {% if data.sesi==3 %}selected{% endif %}>3</option>
+                                        <option value="4" {% if data.sesi==4 %}selected{% endif %}>4</option>
                                 </select>
                         </div>
                         <div>
                                 <label class="block text-xs text-slate-600 mb-1">Gelombang</label>
                                 <select name="gelombang" class="input">
-                                        <option value="1" {% if data.gelombang == 1 %}selected{% endif %}>1</option>
-                                        <option value="2" {% if data.gelombang == 2 %}selected{% endif %}>2</option>
-                                        <option value="3" {% if data.gelombang == 3 %}selected{% endif %}>3</option>
-                                        <option value="4" {% if data.gelombang == 4 %}selected{% endif %}>4</option>
+                                        <option value="3" {% if data.gelombang==3 %}selected{% endif %}>3</option>
+                                        <option value="4" {% if data.gelombang==4 %}selected{% endif %}>4</option>
                                 </select>
                         </div>
                         <button type="submit" class="button bg-sky-600 text-white hover:bg-sky-700">
@@ -159,7 +159,8 @@
                                                         class="rounded bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">Started</span>
                                                 {% else %}
                                                 <span
-                                                        class="rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">Belum Mulai</span>
+                                                        class="rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">Belum
+                                                        Mulai</span>
                                                 {% endif %}
                                         </td>
                                         <td class="border px-2 py-1 text-center">
