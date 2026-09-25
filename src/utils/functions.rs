@@ -4,6 +4,21 @@ use tera::{Function, Result as TeraResult, Value};
 
 pub struct TahunOptions;
 
+pub struct LabLabel;
+
+impl Function for LabLabel {
+    fn call(&self, args: &std::collections::HashMap<String, Value>) -> TeraResult<Value> {
+        let Some(kode) = args.get("kode").and_then(Value::as_str) else {
+            return Ok(json!("-"));
+        };
+
+        match kode.parse::<u8>() {
+            Ok(nomor @ 1..=15) => Ok(json!(format!("Lab {nomor}"))),
+            _ => Ok(json!("-")),
+        }
+    }
+}
+
 impl Function for TahunOptions {
     fn call(&self, _args: &std::collections::HashMap<String, Value>) -> TeraResult<Value> {
         let start = 2021;
@@ -29,8 +44,9 @@ impl Function for TahunOptions {
 
 #[cfg(test)]
 mod tests {
-    use super::TahunOptions;
+    use super::{LabLabel, TahunOptions};
     use chrono::{Datelike, Local};
+    use serde_json::json;
     use tera::Function;
 
     #[test]
@@ -49,5 +65,11 @@ mod tests {
         let last = arr.last().unwrap();
         let value = last.get("value").and_then(|v| v.as_str()).unwrap();
         assert_eq!(value, format!("{} / {}", current_start, current_start + 1));
+    }
+
+    #[test]
+    fn lab_label_uses_plain_lab_number() {
+        let args = std::collections::HashMap::from([("kode".to_string(), json!("09"))]);
+        assert_eq!(LabLabel.call(&args).unwrap(), json!("Lab 9"));
     }
 }

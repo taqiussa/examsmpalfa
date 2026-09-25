@@ -10,7 +10,10 @@ use tera::Context;
 use crate::controllers::guru::absensi_kelas::Htmx;
 use crate::utils::{page_context::PageContext, render::render, tahun::data_tahun};
 
-use super::{StatusPesertaFilter, UjianOption, fetch_ujian_options, flash_error, flash_success};
+use super::{
+    StatusPesertaFilter, UjianOption, fetch_ujian_options, flash_error, flash_success,
+    lab_kode_atau_default,
+};
 
 #[derive(Serialize)]
 struct StatusPesertaData {
@@ -90,10 +93,7 @@ pub async fn status_peserta_table(
     axum::Extension(db): axum::Extension<MySqlPool>,
 ) -> axum::response::Response {
     let tahun = filter.tahun.clone().unwrap_or_else(data_tahun);
-    let lab_kode = match filter.lab_kode.as_deref() {
-        Some("02") => "02".to_string(),
-        _ => "01".to_string(),
-    };
+    let lab_kode = lab_kode_atau_default(filter.lab_kode.as_deref());
     let sesi = filter.sesi.filter(|v| (1..=4).contains(v)).unwrap_or(1);
     let gelombang = filter
         .gelombang

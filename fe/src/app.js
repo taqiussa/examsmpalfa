@@ -132,6 +132,9 @@ document.addEventListener('submit', (event) => {
   const form = event.target
   if (!(form instanceof HTMLFormElement)) return
   if (form.closest('[data-loading="off"]')) return
+  // Submitting to another browsing context leaves the current page usable, so
+  // there is no navigation on this tab whose completion could clear the loader.
+  if (form.target && form.target !== '_self') return
   if (
     form.hasAttribute('hx-get') ||
     form.hasAttribute('hx-post') ||
@@ -148,6 +151,7 @@ document.addEventListener('click', (event) => {
   const link = event.target.closest('a')
   if (!link) return
   if (link.closest('[data-loading="off"]')) return
+  if (link.hasAttribute('download')) return
   if (link.target && link.target !== '_self') return
   if (link.hasAttribute('hx-get') || link.hasAttribute('hx-post')) return
   const href = link.getAttribute('href') || ''

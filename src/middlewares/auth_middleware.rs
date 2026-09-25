@@ -118,8 +118,8 @@ mod tests {
         };
         let app = Router::new()
             .route("/protected", get(protected_handler))
-            .layer(Extension(test_db.pool.clone()))
-            .layer(middleware::from_fn(auth_middleware));
+            .layer(middleware::from_fn(auth_middleware))
+            .layer(Extension(test_db.pool.clone()));
 
         let response = app
             .oneshot(
@@ -145,8 +145,8 @@ mod tests {
 
         let app = Router::new()
             .route("/protected", get(protected_handler))
-            .layer(Extension(test_db.pool.clone()))
-            .layer(middleware::from_fn(auth_middleware));
+            .layer(middleware::from_fn(auth_middleware))
+            .layer(Extension(test_db.pool.clone()));
 
         let response = app
             .oneshot(

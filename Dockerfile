@@ -21,7 +21,7 @@ RUN npm run build
 # =========================
 # Rust Builder
 # =========================
-FROM rust:1.92.0-bookworm AS rust_builder
+FROM rust:1.94.0-bookworm AS rust_builder
 
 WORKDIR /app
 
@@ -51,10 +51,10 @@ COPY templates/ ./templates/
 COPY migrations/ ./migrations/
 COPY .sqlx/ ./.sqlx/
 
-RUN rm -f /app/target/release/examsmpalfa \
+RUN rm -f /app/target/release/examelemenka \
     && find src -type f -exec touch {} + \
     && cargo build --release --locked \
-    && strip /app/target/release/examsmpalfa
+    && strip /app/target/release/examelemenka
 
 
 # =========================
@@ -71,7 +71,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && rm -rf /var/lib/apt/lists/*
 
 # app binary
-COPY --from=rust_builder /app/target/release/examsmpalfa /app/app
+COPY --from=rust_builder /app/target/release/examelemenka /app/app
 
 # sqlx cli
 COPY --from=rust_builder /usr/local/cargo/bin/sqlx /usr/local/bin/sqlx

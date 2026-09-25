@@ -1,0 +1,25 @@
+<form id="data-kelas-form" method="post" action="{{ data.action }}" hx-post="{{ data.action }}"
+  hx-target="#data-kelas-form" hx-swap="outerHTML" class="space-y-6">
+  <div>
+    <label for="nama" class="mb-1 block text-sm font-medium text-slate-700">
+      Nama Kelas <span class="text-rose-500">*</span>
+    </label>
+    <input id="nama" type="text" name="nama" value="{{ data.nama }}" maxlength="255" required autofocus
+      placeholder="Contoh: 7.A" class="input w-full {% if data.errors.nama %}border-rose-500{% endif %}">
+    {% if data.errors.nama %}<p class="mt-1 text-xs text-rose-500">{{ data.errors.nama }}</p>{% endif %}
+  </div>
+
+  <div>
+    <label for="tingkat" class="mb-1 block text-sm font-medium text-slate-700">
+      Tingkat <span class="text-rose-500">*</span>
+    </label>
+    <input id="tingkat" type="number" name="tingkat" value="{{ data.tingkat }}" min="1" max="12" required
+      placeholder="Contoh: 7" class="input w-full {% if data.errors.tingkat %}border-rose-500{% endif %}">
+    {% if data.errors.tingkat %}<p class="mt-1 text-xs text-rose-500">{{ data.errors.tingkat }}</p>{% endif %}
+  </div>
+
+  <div class="flex items-center justify-end gap-3 border-t pt-4">
+    <a href="/data-kelas" hx-boost="false" class="button bg-slate-100 text-slate-700 hover:bg-slate-200">Batal</a>
+    <button type="submit" class="button bg-emerald-600 text-white hover:bg-emerald-700">{{ data.submit_label }}</button>
+  </div>
+</form>

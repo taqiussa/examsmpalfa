@@ -1,0 +1,46 @@
+<div class="space-y-4">
+  {% if error %}
+  <div class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700" role="alert">
+    {{ error }} Seluruh transaksi telah dibatalkan dan tidak ada perubahan parsial yang disimpan.
+  </div>
+  {% if error_row %}
+  <div class="overflow-x-auto">
+    <table class="w-full border border-rose-200 rounded-md text-sm">
+      <thead class="bg-rose-50">
+        <tr>
+          <th class="border px-3 py-2 text-center">Baris</th>
+          <th class="border px-3 py-2 text-left">NIS</th>
+          <th class="border px-3 py-2 text-left">Nama</th>
+          <th class="border px-3 py-2 text-left">Error</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="border px-3 py-2 text-center">{{ error_row.row_number }}</td>
+          <td class="border px-3 py-2">{{ error_row.nis }}</td>
+          <td class="border px-3 py-2">{{ error_row.name }}</td>
+          <td class="border px-3 py-2 text-rose-700">{{ error_row.error }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+  {% else %}
+  <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">
+    Import data siswa berhasil diselesaikan.
+  </div>
+  {% endif %}
+
+  <div class="overflow-x-auto">
+    <table class="w-full max-w-xl border border-slate-200 rounded-md text-sm">
+      <tbody>
+        <tr><th class="border bg-slate-50 px-3 py-2 text-left">Total baris</th><td class="border px-3 py-2 text-right">{{ summary.total_rows }}</td></tr>
+        <tr><th class="border bg-slate-50 px-3 py-2 text-left">User baru</th><td class="border px-3 py-2 text-right">{{ summary.user_baru }}</td></tr>
+        <tr><th class="border bg-slate-50 px-3 py-2 text-left">User diperbarui</th><td class="border px-3 py-2 text-right">{{ summary.user_diperbarui }}</td></tr>
+        <tr><th class="border bg-slate-50 px-3 py-2 text-left">Siswa baru</th><td class="border px-3 py-2 text-right">{{ summary.siswa_baru }}</td></tr>
+        <tr><th class="border bg-slate-50 px-3 py-2 text-left">Siswa diperbarui</th><td class="border px-3 py-2 text-right">{{ summary.siswa_diperbarui }}</td></tr>
+        <tr><th class="border bg-slate-50 px-3 py-2 text-left">Gagal</th><td class="border px-3 py-2 text-right">{{ summary.gagal }}</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>

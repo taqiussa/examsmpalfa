@@ -4,7 +4,7 @@ use std::net::SocketAddr;
 use tera::Tera;
 use tower_http::services::ServeDir;
 
-use crate::utils::functions::TahunOptions;
+use crate::utils::functions::{LabLabel, TahunOptions};
 
 mod config;
 mod controllers;
@@ -35,6 +35,7 @@ async fn main() {
     });
 
     tera.register_function("tahun_options", TahunOptions);
+    tera.register_function("lab_label", LabLabel);
 
     println!("📦 Loaded templates:");
     for name in tera.get_template_names() {

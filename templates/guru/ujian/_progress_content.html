@@ -40,10 +40,7 @@
                         <div>
                                 <label class="block text-xs text-slate-600 mb-1">Lab</label>
                                 <select name="lab_kode" class="input">
-                                        <option value="01" {% if data.lab_kode=="01" %}selected{% endif %}>Lab Utara
-                                                (01)</option>
-                                        <option value="02" {% if data.lab_kode=="02" %}selected{% endif %}>Lab Selatan
-                                                (02)</option>
+                                        {% include "components/lab-options.html" %}
                                 </select>
                         </div>
                         <div>
@@ -74,7 +71,7 @@
                         <div class="text-xs text-slate-500">
                                 {{ t.tahun | default(value=data.tahun) }}
                                 |
-                                {% if t.lab_kode == "02" %}Lab Selatan (02){% else %}Lab Utara (01){% endif %}
+                                {{ lab_label(kode=t.lab_kode | default(value="")) }}
                                 | Sesi {{ t.sesi | default(value=1) }}
                                 | Gelombang {{ t.gelombang | default(value=1) }}
                         </div>
@@ -145,8 +142,7 @@
                                         <td class="border px-2 py-1">
                                                 {{ h.tahun | default(value=data.tahun) }}
                                                 /
-                                                {% if h.lab_kode == "02" %}Lab Selatan (02){% else %}Lab Utara (01){%
-                                                endif %}
+                                                {{ lab_label(kode=h.lab_kode | default(value="")) }}
                                                 / S{{ h.sesi | default(value=1) }}
                                                 / G{{ h.gelombang | default(value=1) }}
                                         </td>

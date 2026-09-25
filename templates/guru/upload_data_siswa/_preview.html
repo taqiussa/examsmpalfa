@@ -1,0 +1,78 @@
+{% if data.general_error %}
+<div class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700" role="alert">
+  {{ data.general_error }}
+</div>
+{% else %}
+<div class="space-y-4">
+  <div class="flex flex-wrap gap-3 text-sm">
+    <div class="rounded-lg border border-slate-200 bg-white px-4 py-3">
+      <div class="text-slate-500">Total baris</div>
+      <div class="text-xl font-semibold text-slate-800">{{ data.total_rows }}</div>
+    </div>
+    <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
+      <div class="text-emerald-700">Valid</div>
+      <div class="text-xl font-semibold text-emerald-800">{{ data.valid_rows }}</div>
+    </div>
+    <div class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3">
+      <div class="text-rose-700">Tidak valid</div>
+      <div class="text-xl font-semibold text-rose-800">{{ data.invalid_rows }}</div>
+    </div>
+  </div>
+
+  {% if data.invalid_rows > 0 %}
+  <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+    Perbaiki seluruh baris yang tidak valid, lalu upload ulang file. Tidak ada data yang diimport pada tahap preview.
+  </div>
+  {% endif %}
+
+  <div class="overflow-x-auto">
+    <table class="w-full border border-slate-200 rounded-md text-sm">
+      <thead class="bg-slate-100">
+        <tr>
+          <th class="border px-2 py-2 text-center">Baris</th>
+          <th class="border px-2 py-2 text-left">Nama</th>
+          <th class="border px-2 py-2 text-left">NIS</th>
+          <th class="border px-2 py-2 text-left">Kelas</th>
+          <th class="border px-2 py-2 text-center">Tingkat</th>
+          <th class="border px-2 py-2 text-center">Tahun</th>
+          <th class="border px-2 py-2 text-left">Status Validasi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in data.rows %}
+        <tr class="{% if not row.valid %}bg-rose-50{% else %}hover:bg-slate-50{% endif %}">
+          <td class="border px-2 py-2 text-center">{{ row.row_number }}</td>
+          <td class="border px-2 py-2">{{ row.name | default(value="-") }}</td>
+          <td class="border px-2 py-2">{{ row.nis | default(value="-") }}</td>
+          <td class="border px-2 py-2">
+            {{ row.kelas_id | default(value="-") }} — {{ row.kelas_nama }}
+          </td>
+          <td class="border px-2 py-2 text-center">{{ row.tingkat | default(value="-") }}</td>
+          <td class="border px-2 py-2 text-center">{{ row.tahun | default(value="-") }}</td>
+          <td class="border px-2 py-2">
+            {% if row.valid %}
+            <span class="font-semibold text-emerald-700">Valid</span>
+            {% else %}
+            <ul class="list-disc pl-4 text-rose-700">
+              {% for error in row.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if data.can_import %}
+  <form hx-post="/upload-data-siswa/import" hx-target="#upload-result" hx-swap="innerHTML"
+    class="flex justify-end border-t pt-4">
+    <textarea name="payload" class="hidden" aria-hidden="true">{{ data.payload }}</textarea>
+    <button type="submit" data-confirm="Import seluruh data siswa yang sudah valid?"
+      class="button bg-emerald-600 text-white hover:bg-emerald-700">
+      Import {{ data.total_rows }} Data Siswa
+    </button>
+  </form>
+  {% endif %}
+</div>
+{% endif %}

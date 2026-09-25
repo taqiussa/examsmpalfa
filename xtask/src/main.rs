@@ -22,7 +22,7 @@ fn main() -> std::io::Result<()> {
         .arg("-w")
         .arg("templates")
         .arg("-x")
-        .arg("run --bin examsmpalfa");
+        .arg("run --bin examelemenka");
     let mut be = spawn_child(be_cmd, "backend (cargo watch)")?;
 
     let mut fe_cmd = Command::new("npm");

@@ -1,6 +1,6 @@
 services:
-  examsmpalfa:
-    image: taqiussa/examsmpalfa:latest
+  examelemenka:
+    image: taqiussa/examelemenka:latest
 
     env_file:
       - .env
@@ -9,7 +9,7 @@ services:
       - web
 
     deploy:
-      replicas: 2
+      replicas: 1
 
       labels:
         - "traefik.enable=true"

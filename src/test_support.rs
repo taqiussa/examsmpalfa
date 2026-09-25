@@ -2,7 +2,7 @@ use sqlx::MySqlPool;
 use std::str::FromStr;
 use tera::Tera;
 
-use crate::utils::functions::TahunOptions;
+use crate::utils::functions::{LabLabel, TahunOptions};
 
 #[derive(Debug)]
 pub struct TestDb {
@@ -70,6 +70,7 @@ impl TestDb {
 pub fn build_test_tera() -> Tera {
     let mut tera = Tera::new("templates/**/*").expect("Failed to init Tera");
     tera.register_function("tahun_options", TahunOptions);
+    tera.register_function("lab_label", LabLabel);
     tera
 }
 
@@ -108,7 +109,7 @@ pub async fn seed_base_data(pool: &MySqlPool) -> SeedData {
     .execute(&mut *tx)
     .await
     .unwrap();
-    let admin_id: i64 = sqlx::query_scalar("SELECT LAST_INSERT_ID()")
+    let admin_id: i64 = sqlx::query_scalar("SELECT CAST(LAST_INSERT_ID() AS SIGNED)")
         .fetch_one(&mut *tx)
         .await
         .unwrap();
@@ -123,7 +124,7 @@ pub async fn seed_base_data(pool: &MySqlPool) -> SeedData {
     .execute(&mut *tx)
     .await
     .unwrap();
-    let guru_id: i64 = sqlx::query_scalar("SELECT LAST_INSERT_ID()")
+    let guru_id: i64 = sqlx::query_scalar("SELECT CAST(LAST_INSERT_ID() AS SIGNED)")
         .fetch_one(&mut *tx)
         .await
         .unwrap();
@@ -140,23 +141,26 @@ pub async fn seed_base_data(pool: &MySqlPool) -> SeedData {
     .execute(&mut *tx)
     .await
     .unwrap();
-    let siswa_id: i64 = sqlx::query_scalar("SELECT LAST_INSERT_ID()")
+    let siswa_id: i64 = sqlx::query_scalar("SELECT CAST(LAST_INSERT_ID() AS SIGNED)")
         .fetch_one(&mut *tx)
         .await
         .unwrap();
 
-    let role_admin_id: i64 = sqlx::query_scalar("SELECT id FROM roles WHERE name = 'Admin'")
-        .fetch_one(&mut *tx)
-        .await
-        .unwrap();
-    let role_guru_id: i64 = sqlx::query_scalar("SELECT id FROM roles WHERE name = 'Guru'")
-        .fetch_one(&mut *tx)
-        .await
-        .unwrap();
-    let role_siswa_id: i64 = sqlx::query_scalar("SELECT id FROM roles WHERE name = 'Siswa'")
-        .fetch_one(&mut *tx)
-        .await
-        .unwrap();
+    let role_admin_id: i64 =
+        sqlx::query_scalar("SELECT CAST(id AS SIGNED) FROM roles WHERE name = 'Admin'")
+            .fetch_one(&mut *tx)
+            .await
+            .unwrap();
+    let role_guru_id: i64 =
+        sqlx::query_scalar("SELECT CAST(id AS SIGNED) FROM roles WHERE name = 'Guru'")
+            .fetch_one(&mut *tx)
+            .await
+            .unwrap();
+    let role_siswa_id: i64 =
+        sqlx::query_scalar("SELECT CAST(id AS SIGNED) FROM roles WHERE name = 'Siswa'")
+            .fetch_one(&mut *tx)
+            .await
+            .unwrap();
 
     sqlx::query("INSERT INTO model_has_roles (role_id, model_id) VALUES (?, ?), (?, ?), (?, ?)")
         .bind(role_admin_id)
@@ -173,7 +177,7 @@ pub async fn seed_base_data(pool: &MySqlPool) -> SeedData {
         .execute(&mut *tx)
         .await
         .unwrap();
-    let kelas_id: i64 = sqlx::query_scalar("SELECT LAST_INSERT_ID()")
+    let kelas_id: i64 = sqlx::query_scalar("SELECT CAST(LAST_INSERT_ID() AS SIGNED)")
         .fetch_one(&mut *tx)
         .await
         .unwrap();
@@ -227,37 +231,51 @@ pub async fn seed_base_data(pool: &MySqlPool) -> SeedData {
 async fn init_schema(pool: &MySqlPool) {
     let schema = r#"
         CREATE TABLE users (
-            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
             username VARCHAR(255),
             password VARCHAR(255) NOT NULL,
-            nis VARCHAR(50),
+            nis BIGINT UNIQUE,
             foto VARCHAR(255),
             created_at DATETIME,
             updated_at DATETIME
         );
 
         CREATE TABLE roles (
-            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(100) NOT NULL
         );
 
         CREATE TABLE model_has_roles (
-            role_id BIGINT NOT NULL,
-            model_id BIGINT NOT NULL
+            role_id BIGINT UNSIGNED NOT NULL,
+            model_id BIGINT UNSIGNED NOT NULL,
+            model_type VARCHAR(255) NOT NULL DEFAULT 'App\\Models\\User',
+            PRIMARY KEY (role_id, model_id, model_type)
         );
 
         CREATE TABLE kelas (
-            id BIGINT AUTO_INCREMENT PRIMARY KEY,
-            nama VARCHAR(100) NOT NULL,
-            tingkat INT NOT NULL
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            nama VARCHAR(255) NOT NULL,
+            tingkat VARCHAR(255) NOT NULL,
+            created_at DATETIME,
+            updated_at DATETIME
         );
 
         CREATE TABLE siswas (
-            nis VARCHAR(50) PRIMARY KEY,
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            nis BIGINT,
             tahun VARCHAR(20) NOT NULL,
-            kelas_id BIGINT NOT NULL,
-            tingkat INT NOT NULL
+            kelas_id BIGINT UNSIGNED NOT NULL,
+            tingkat INT NOT NULL,
+            created_at DATETIME,
+            updated_at DATETIME,
+            FOREIGN KEY (kelas_id) REFERENCES kelas(id)
+        );
+
+        CREATE TABLE mata_pelajarans (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            nama VARCHAR(255) NOT NULL UNIQUE,
+            kelompok VARCHAR(10) NOT NULL DEFAULT 'E'
         );
 
         CREATE TABLE biodatas (

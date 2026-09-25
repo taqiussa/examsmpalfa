@@ -8,7 +8,10 @@ use sqlx::MySqlPool;
 
 use crate::utils::{page_context::PageContext, render::render, tahun::data_tahun};
 
-use super::{HasilRow, ProgressFilter, TokenRow, UjianDetailRow, UjianOption, fetch_ujian_options};
+use super::{
+    HasilRow, ProgressFilter, TokenRow, UjianDetailRow, UjianOption, fetch_ujian_options,
+    lab_kode_atau_default,
+};
 
 use crate::controllers::guru::absensi_kelas::Htmx;
 
@@ -44,10 +47,7 @@ pub async fn ujian_progress(
     );
 
     let tahun = filter.tahun.clone().unwrap_or_else(data_tahun);
-    let lab_kode = match filter.lab_kode.as_deref() {
-        Some("02") => "02".to_string(),
-        _ => "01".to_string(),
-    };
+    let lab_kode = lab_kode_atau_default(filter.lab_kode.as_deref());
     let sesi = filter.sesi.filter(|v| (1..=4).contains(v)).unwrap_or(1);
     let gelombang = filter
         .gelombang

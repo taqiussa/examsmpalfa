@@ -46,4 +46,34 @@ describe('global loading', () => {
     window.loading.stop()
     expect(window.loading.count).toBe(0)
   })
+
+  it('does not show loading for download links', async () => {
+    document.body.innerHTML = `
+      <div id="global-loading" class="hidden opacity-0"></div>
+      <a href="/upload-peserta/draft" download>Download</a>
+    `
+    await loadApp()
+
+    document.querySelector('a')?.dispatchEvent(
+      new MouseEvent('click', { bubbles: true, cancelable: true }),
+    )
+
+    expect(window.loading.count).toBe(0)
+    expect(document.getElementById('global-loading')?.classList.contains('hidden')).toBe(true)
+  })
+
+  it('does not show loading for forms submitted to a new tab', async () => {
+    document.body.innerHTML = `
+      <div id="global-loading" class="hidden opacity-0"></div>
+      <form action="/cetak-kartu/print" method="get" target="_blank"></form>
+    `
+    await loadApp()
+
+    document.querySelector('form')?.dispatchEvent(
+      new Event('submit', { bubbles: true, cancelable: true }),
+    )
+
+    expect(window.loading.count).toBe(0)
+    expect(document.getElementById('global-loading')?.classList.contains('hidden')).toBe(true)
+  })
 })

@@ -1,15 +1,16 @@
 use axum::{
     Extension,
     extract::Multipart,
-    http::HeaderMap,
+    http::{HeaderMap, HeaderValue, StatusCode, header},
     response::{Html, IntoResponse, Redirect},
 };
 use calamine::{Data, Reader, open_workbook_auto_from_rs};
 use sqlx::MySqlPool;
 use std::{
     collections::{HashMap, HashSet},
-    io::Cursor,
+    io::{Cursor, Write},
 };
+use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
 
 use crate::{
     controllers::admin::tambah_pengguna::Htmx,
@@ -24,6 +25,212 @@ struct UploadedPesertaRow {
     lab_kode: String,
     sesi: i32,
     gelombang: i32,
+}
+
+pub async fn download_draft_peserta(
+    Extension(db): Extension<MySqlPool>,
+) -> axum::response::Response {
+    let example = fetch_draft_example(&db).await;
+    let Some(example) = example else {
+        return (
+            StatusCode::NOT_FOUND,
+            "Draft tidak dapat dibuat karena data siswa belum tersedia.",
+        )
+            .into_response();
+    };
+
+    let bytes = match build_draft_xlsx(&example) {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            eprintln!("ERROR download_draft_peserta: failed generating xlsx: {error:?}");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Gagal membuat draft Excel peserta.",
+            )
+                .into_response();
+        }
+    };
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ),
+    );
+    headers.insert(
+        header::CONTENT_DISPOSITION,
+        HeaderValue::from_static("attachment; filename=\"draft-upload-peserta.xlsx\""),
+    );
+
+    (headers, bytes).into_response()
+}
+
+async fn fetch_draft_example(db: &MySqlPool) -> Option<UploadedPesertaRow> {
+    let registered = sqlx::query_as::<_, (String, String, i64, String, i32, i32)>(
+        r#"
+        SELECT
+            tahun,
+            CAST(nis AS CHAR),
+            CAST(kelas_id AS SIGNED),
+            CAST(lab_kode AS CHAR),
+            CAST(sesi AS SIGNED),
+            CAST(gelombang AS SIGNED)
+        FROM ujian_pesertas
+        WHERE kelas_id IS NOT NULL
+        ORDER BY updated_at DESC, id DESC
+        LIMIT 1
+        "#,
+    )
+    .fetch_optional(db)
+    .await
+    .ok()
+    .flatten();
+
+    if let Some((tahun, nis, kelas_id, lab_kode, sesi, gelombang)) = registered {
+        return Some(UploadedPesertaRow {
+            tahun,
+            nis,
+            kelas_id,
+            lab_kode,
+            sesi,
+            gelombang,
+        });
+    }
+
+    sqlx::query_as::<_, (String, String, i64)>(
+        r#"
+        SELECT CAST(tahun AS CHAR), CAST(nis AS CHAR), CAST(kelas_id AS SIGNED)
+        FROM siswas
+        ORDER BY tahun DESC, nis ASC
+        LIMIT 1
+        "#,
+    )
+    .fetch_optional(db)
+    .await
+    .ok()
+    .flatten()
+    .map(|(tahun, nis, kelas_id)| UploadedPesertaRow {
+        tahun,
+        nis,
+        kelas_id,
+        lab_kode: "01".to_string(),
+        sesi: 1,
+        gelombang: 1,
+    })
+}
+
+fn build_draft_xlsx(example: &UploadedPesertaRow) -> Result<Vec<u8>, zip::result::ZipError> {
+    let cursor = Cursor::new(Vec::new());
+    let mut archive = ZipWriter::new(cursor);
+    let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+
+    write_zip_entry(
+        &mut archive,
+        "[Content_Types].xml",
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+ <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+ <Default Extension="xml" ContentType="application/xml"/>
+ <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+ <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+</Types>"#,
+        options,
+    )?;
+    write_zip_entry(
+        &mut archive,
+        "_rels/.rels",
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+ <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>"#,
+        options,
+    )?;
+    write_zip_entry(
+        &mut archive,
+        "xl/workbook.xml",
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+ <sheets><sheet name="Peserta" sheetId="1" r:id="rId1"/></sheets>
+</workbook>"#,
+        options,
+    )?;
+    write_zip_entry(
+        &mut archive,
+        "xl/_rels/workbook.xml.rels",
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+ <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+</Relationships>"#,
+        options,
+    )?;
+
+    let worksheet = build_worksheet_xml(example);
+    write_zip_entry(
+        &mut archive,
+        "xl/worksheets/sheet1.xml",
+        &worksheet,
+        options,
+    )?;
+
+    Ok(archive.finish()?.into_inner())
+}
+
+fn write_zip_entry(
+    archive: &mut ZipWriter<Cursor<Vec<u8>>>,
+    name: &str,
+    contents: &str,
+    options: SimpleFileOptions,
+) -> Result<(), zip::result::ZipError> {
+    archive.start_file(name, options)?;
+    archive.write_all(contents.as_bytes())?;
+    Ok(())
+}
+
+fn build_worksheet_xml(example: &UploadedPesertaRow) -> String {
+    let text_cell = |reference: &str, value: &str| {
+        format!(
+            r#"<c r="{}" t="inlineStr"><is><t>{}</t></is></c>"#,
+            reference,
+            escape_xml(value)
+        )
+    };
+    let number_cell =
+        |reference: &str, value: i64| format!(r#"<c r="{}"><v>{}</v></c>"#, reference, value);
+
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+ <sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
+ <cols><col min="1" max="2" width="18" customWidth="1"/><col min="3" max="6" width="13" customWidth="1"/></cols>
+ <sheetData>
+  <row r="1">{}{}{}{}{}{}</row>
+  <row r="2">{}{}{}{}{}{}</row>
+ </sheetData>
+ <autoFilter ref="A1:F2"/>
+</worksheet>"#,
+        text_cell("A1", "tahun"),
+        text_cell("B1", "nis"),
+        text_cell("C1", "kelas_id"),
+        text_cell("D1", "lab_id"),
+        text_cell("E1", "gelombang"),
+        text_cell("F1", "sesi"),
+        text_cell("A2", &example.tahun),
+        text_cell("B2", &example.nis),
+        number_cell("C2", example.kelas_id),
+        text_cell("D2", &example.lab_kode),
+        number_cell("E2", i64::from(example.gelombang)),
+        number_cell("F2", i64::from(example.sesi)),
+    )
+}
+
+fn escape_xml(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
 }
 
 pub async fn upload_peserta_page(
@@ -360,12 +567,12 @@ fn normalize_header(value: &str) -> String {
 }
 
 fn parse_lab_code(value: &str, row_number: usize) -> Result<String, String> {
-    match value.trim() {
-        "1" | "01" => Ok("01".to_string()),
-        "2" | "02" => Ok("02".to_string()),
-        other => Err(format!(
-            "Lab pada baris {} harus bernilai 01/1 atau 02/2, ditemukan '{}'.",
-            row_number, other
+    let value = value.trim();
+    match value.parse::<u8>() {
+        Ok(lab @ 1..=15) => Ok(format!("{lab:02}")),
+        _ => Err(format!(
+            "Lab pada baris {} harus bernilai 1 sampai 15, ditemukan '{}'.",
+            row_number, value
         )),
     }
 }
@@ -393,5 +600,65 @@ fn cell_to_string(cell: &Data) -> String {
         Data::DateTimeIso(value) => value.clone(),
         Data::DurationIso(value) => value.clone(),
         Data::Error(_) => String::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        UploadedPesertaRow, build_draft_xlsx, fetch_draft_example, parse_excel_rows, parse_lab_code,
+    };
+    use serial_test::serial;
+
+    #[test]
+    fn generated_draft_can_be_parsed_by_upload_importer() {
+        let example = UploadedPesertaRow {
+            tahun: "2026/2027".to_string(),
+            nis: "001234".to_string(),
+            kelas_id: 7,
+            lab_kode: "01".to_string(),
+            gelombang: 2,
+            sesi: 3,
+        };
+
+        let bytes = build_draft_xlsx(&example).expect("draft should be generated");
+        let parsed = parse_excel_rows(&bytes).expect("draft should match upload format");
+
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].tahun, example.tahun);
+        assert_eq!(parsed[0].nis, example.nis);
+        assert_eq!(parsed[0].kelas_id, example.kelas_id);
+        assert_eq!(parsed[0].lab_kode, example.lab_kode);
+        assert_eq!(parsed[0].gelombang, example.gelombang);
+        assert_eq!(parsed[0].sesi, example.sesi);
+    }
+
+    #[test]
+    fn lab_code_accepts_labs_one_through_fifteen() {
+        assert_eq!(parse_lab_code("1", 2).unwrap(), "01");
+        assert_eq!(parse_lab_code("15", 2).unwrap(), "15");
+        assert!(parse_lab_code("16", 2).is_err());
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn draft_uses_a_student_from_database_when_registry_is_empty() {
+        let Some(test_db) = crate::test_support::TestDb::try_new().await else {
+            return;
+        };
+        let seed = crate::test_support::seed_base_data(&test_db.pool).await;
+
+        let example = fetch_draft_example(&test_db.pool)
+            .await
+            .expect("seeded student should be used as example");
+
+        assert_eq!(example.tahun, seed.tahun);
+        assert_eq!(example.nis, seed.nis);
+        assert_eq!(example.kelas_id, seed.kelas_id);
+        assert_eq!(example.lab_kode, "01");
+        assert_eq!(example.gelombang, 1);
+        assert_eq!(example.sesi, 1);
+
+        test_db.teardown().await;
     }
 }

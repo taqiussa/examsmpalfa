@@ -118,8 +118,8 @@ Ada dua cara deploy:
 #### Opsi A: Pull Image (Direkomendasikan)
 1. **Build & Push image (di lokal/CI)**
 ```bash
-docker build -t yourdockerhubuser/examsmpalfa:latest .
-docker push yourdockerhubuser/examsmpalfa:latest
+docker build -t yourdockerhubuser/examelemenka:latest .
+docker push yourdockerhubuser/examelemenka:latest
 ```
 
 2. **Siapkan `.env.prod` di server**
@@ -128,7 +128,7 @@ Contoh isi:
 ```
 APP_ENV=production
 APP_PORT=3000
-DATABASE_URL=mysql://user:pass@mariadb:3306/examsmpalfa
+DATABASE_URL=mysql://user:pass@mariadb:3306/examelemenka
 ```
 
 3. **Pull & Run di server**
@@ -158,7 +158,7 @@ Build image **tidak butuh koneksi DB** jika `.sqlx/` sudah ada dan `SQLX_OFFLINE
 Jalankan ini di lokal/CI setiap kali query SQL berubah:
 ```bash
 DATABASE_URL="mysql://user:pass@host:3306/db" 
-cargo sqlx prepare -- --bin examsmpalfa
+cargo sqlx prepare -- --bin examelemenka
 ```
 
 ### 3. Henti Services

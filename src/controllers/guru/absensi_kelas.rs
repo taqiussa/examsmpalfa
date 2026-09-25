@@ -424,7 +424,7 @@ mod tests {
 
         assert_eq!(response.status(), axum::http::StatusCode::OK);
 
-        let count: i64 = sqlx::query_scalar!("SELECT COUNT(*) FROM absensis")
+        let count: i64 = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM absensis")
             .fetch_one(&test_db.pool)
             .await
             .unwrap_or(0);

@@ -2,9 +2,14 @@
 
 {% block content %}
 <div class="card space-y-6">
-  <div>
-    <h1 class="text-xl font-semibold">Upload Peserta</h1>
-    <p class="text-sm text-slate-500 mt-1">Upload data peserta global dari file Excel `.xls` atau `.xlsx` dengan heading baris pertama.</p>
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <h1 class="text-xl font-semibold">Upload Peserta</h1>
+      <p class="text-sm text-slate-500 mt-1">Upload data peserta global dari file Excel `.xls` atau `.xlsx` dengan heading baris pertama.</p>
+    </div>
+    <a href="/upload-peserta/draft" class="button bg-emerald-600 text-white hover:bg-emerald-700" download data-loading="off">
+      Download Draft Excel
+    </a>
   </div>
 
   <div class="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 space-y-2">
@@ -12,6 +17,7 @@
     <div>`tahun`, `nis`, `kelas_id`, `lab_id`, `gelombang`, `sesi`</div>
     <div>Contoh nilai `lab_id`: `01` atau `02`.</div>
     <div>Baris pertama wajib header, baris berikutnya data peserta.</div>
+    <div>Draft Excel berisi satu contoh peserta yang diambil dari database.</div>
     <div>Data ini bersifat global, jadi tidak perlu memilih ujian atau mata pelajaran.</div>
   </div>
 

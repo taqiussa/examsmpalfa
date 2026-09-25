@@ -7,7 +7,7 @@
       <h3 class="text-base font-semibold text-slate-700">Daftar Peserta</h3>
       <div class="text-xs text-slate-500">
         {{ data.tahun }} |
-        {% if data.lab_kode == "02" %}Lab Selatan (02){% else %}Lab Utara (01){% endif %}
+        {{ lab_label(kode=data.lab_kode) }}
         | Sesi {{ data.sesi }} | Gelombang {{ data.gelombang }}
       </div>
     </div>
@@ -36,13 +36,7 @@
           <td class="border px-2 py-1">{{ p.kelas | default(value="-") }}</td>
           <td class="border px-2 py-1">{{ p.tahun | default(value="-") }}</td>
           <td class="border px-2 py-1">
-            {% if p.lab_kode == "02" %}
-            Lab Selatan (02)
-            {% elif p.lab_kode == "01" %}
-            Lab Utara (01)
-            {% else %}
-            -
-            {% endif %}
+            {{ lab_label(kode=p.lab_kode | default(value="")) }}
           </td>
           <td class="border px-2 py-1 text-center">{{ p.sesi | default(value=0) }}</td>
           <td class="border px-2 py-1 text-center">{{ p.gelombang | default(value=0) }}</td>

@@ -1,13 +1,13 @@
 services:
   app:
-    image: taqiussa/examsmpalfa:latest
+    image: taqiussa/examelemenka:latest
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: examsmpalfa
+    container_name: examelemenka
     restart: unless-stopped
     env_file:
-      - .env.docker
+      - .env
     pull_policy: ${PULL_POLICY:-if_not_present}
     extra_hosts:
       - "host.docker.internal:host-gateway"

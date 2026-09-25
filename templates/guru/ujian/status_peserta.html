@@ -32,8 +32,7 @@
     <div class="min-w-[180px]">
       <label class="block text-sm text-slate-600 mb-1">Lab</label>
       <select name="lab_kode" class="input">
-        <option value="01" {% if data.lab_kode=="01" %}selected{% endif %}>Lab Utara (01)</option>
-        <option value="02" {% if data.lab_kode=="02" %}selected{% endif %}>Lab Selatan (02)</option>
+        {% include "components/lab-options.html" %}
       </select>
     </div>
     <div class="min-w-[120px]">

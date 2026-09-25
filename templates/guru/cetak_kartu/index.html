@@ -1,0 +1,28 @@
+{% extends "layouts/app.html" %}
+
+{% block content %}
+<div class="card space-y-6">
+  <div>
+    <h1 class="card-header">Cetak Kartu Ujian</h1>
+    <p class="mt-1 text-sm text-slate-500">
+      Pilih tahun dan kelas, lalu isi nama ujian. Nama ujian hanya digunakan untuk cetakan dan tidak disimpan.
+    </p>
+  </div>
+
+  <form action="/cetak-kartu/print" method="get" target="_blank" data-loading="off"
+    class="grid gap-4 md:grid-cols-3">
+    {% include "components/tahun.html" %}
+    {% include "components/list-kelas.html" %}
+
+    <label class="flex flex-col space-y-1 text-md text-slate-600">
+      <span>Nama Ujian</span>
+      <input type="text" name="nama_ujian" class="input" maxlength="150"
+        placeholder="Contoh: Penilaian Tengah Semester" required>
+    </label>
+
+    <div class="md:col-span-3">
+      <button type="submit" class="button">Cetak Kartu</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

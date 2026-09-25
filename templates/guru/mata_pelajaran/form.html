@@ -1,0 +1,17 @@
+{% extends "layouts/app.html" %}
+
+{% block content %}
+<div class="card space-y-6">
+  <div class="flex items-center gap-4">
+    <a href="/mata-pelajaran" hx-boost="false" class="text-slate-500 hover:text-slate-700">
+      ← Kembali
+    </a>
+    <div>
+      <h1 class="card-header">{{ data.page_title }}</h1>
+      <p class="text-sm text-slate-500 mt-1">Isi nama mata pelajaran yang akan digunakan dalam ujian.</p>
+    </div>
+  </div>
+
+  {% include "guru/mata_pelajaran/_form.html" %}
+</div>
+{% endblock %}

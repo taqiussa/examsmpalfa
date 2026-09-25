@@ -1,0 +1,15 @@
+{% extends "layouts/app.html" %}
+
+{% block content %}
+<div class="card space-y-6">
+  <div class="flex items-center gap-4">
+    <a href="/data-kelas" hx-boost="false" class="text-slate-500 hover:text-slate-700">← Kembali</a>
+    <div>
+      <h1 class="card-header">{{ data.page_title }}</h1>
+      <p class="mt-1 text-sm text-slate-500">Isi nama kelas dan tingkatnya.</p>
+    </div>
+  </div>
+
+  {% include "guru/data_kelas/_form.html" %}
+</div>
+{% endblock %}

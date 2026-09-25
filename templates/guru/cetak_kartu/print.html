@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kartu Ujian - {{ nama_ujian }}</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: #e5e7eb;
+      color: #111827;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px 20px;
+      background: #fff;
+      border-bottom: 1px solid #d1d5db;
+    }
+    .toolbar button {
+      border: 0;
+      border-radius: 6px;
+      padding: 9px 18px;
+      background: #059669;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .empty {
+      max-width: 760px;
+      margin: 32px auto;
+      padding: 24px;
+      border-radius: 8px;
+      background: #fff;
+      text-align: center;
+    }
+    .sheet {
+      width: 210mm;
+      min-height: 330mm;
+      margin: 10mm auto;
+      padding: 10mm;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-rows: repeat(5, 1fr);
+      gap: 3mm;
+      background: #fff;
+      box-shadow: 0 2px 12px rgb(0 0 0 / 18%);
+    }
+    .card {
+      min-width: 0;
+      overflow: hidden;
+      border: 1.2px solid #111827;
+      border-radius: 2mm;
+      padding: 3mm 4mm;
+      break-inside: avoid;
+    }
+    .card-header {
+      margin-bottom: 2.5mm;
+      padding-bottom: 2mm;
+      border-bottom: 1px solid #6b7280;
+      text-align: center;
+    }
+    .card-title {
+      margin: 0;
+      font-size: 13pt;
+      line-height: 1.1;
+      letter-spacing: .04em;
+    }
+    .exam-name {
+      margin: 1mm 0 .5mm;
+      font-size: 10pt;
+      font-weight: 700;
+      line-height: 1.15;
+    }
+    .exam-year { margin: 0; font-size: 8pt; }
+    .details {
+      display: grid;
+      grid-template-columns: 23mm 3mm minmax(0, 1fr);
+      row-gap: 1.1mm;
+      margin: 0;
+      font-size: 9pt;
+      line-height: 1.18;
+    }
+    .details dt, .details dd { margin: 0; min-width: 0; }
+    .details dd { font-weight: 700; overflow-wrap: anywhere; }
+    .details .colon { font-weight: 400; }
+
+    @page { size: 210mm 330mm; margin: 10mm; }
+    @media print {
+      body { background: #fff; }
+      .no-print { display: none !important; }
+      .sheet {
+        width: 190mm;
+        height: 310mm;
+        min-height: 310mm;
+        margin: 0;
+        padding: 0;
+        box-shadow: none;
+        break-after: page;
+        page-break-after: always;
+      }
+      .sheet:last-child {
+        break-after: auto;
+        page-break-after: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar no-print">
+    <span>{{ total_peserta }} peserta kelas {{ kelas }}</span>
+    <button type="button" onclick="window.print()">Print</button>
+  </div>
+
+  {% if total_peserta == 0 %}
+  <div class="empty no-print">
+    Tidak ada siswa pada tahun {{ tahun }} dan kelas {{ kelas }}.
+  </div>
+  {% endif %}
+
+  {% for page in pages %}
+  <main class="sheet">
+    {% for peserta in page %}
+    <article class="card">
+      <header class="card-header">
+        <h1 class="card-title">KARTU UJIAN</h1>
+        <p class="exam-name">{{ nama_ujian }}</p>
+        <p class="exam-year">Tahun Pelajaran {{ tahun }}</p>
+      </header>
+      <dl class="details">
+        <dt>Nama Peserta</dt><dd class="colon">:</dd><dd>{{ peserta.nama }}</dd>
+        <dt>Kelas</dt><dd class="colon">:</dd><dd>{{ peserta.kelas }}</dd>
+        <dt>Username/NIS</dt><dd class="colon">:</dd><dd>{{ peserta.nis }}</dd>
+        <dt>Password</dt><dd class="colon">:</dd><dd>12345678</dd>
+        <dt>Sesi</dt><dd class="colon">:</dd><dd>{% if peserta.sesi %}{{ peserta.sesi }}{% endif %}</dd>
+        <dt>Gelombang</dt><dd class="colon">:</dd><dd>{% if peserta.gelombang %}{{ peserta.gelombang }}{% endif %}</dd>
+      </dl>
+    </article>
+    {% endfor %}
+  </main>
+  {% endfor %}
+</body>
+</html>

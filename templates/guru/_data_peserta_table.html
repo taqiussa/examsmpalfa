@@ -24,13 +24,7 @@
                         <td class="border px-2 py-1 text-center">{{ s.tahun }}</td>
                         <td class="border px-2 py-1 text-center">{{ s.gelombang }}</td>
                         <td class="border px-2 py-1">
-                                {% if s.lab_kode == "02" %}
-                                Lab Selatan (02)
-                                {% elif s.lab_kode == "01" %}
-                                Lab Utara (01)
-                                {% else %}
-                                {{ s.lab_kode }}
-                                {% endif %}
+                                {{ lab_label(kode=s.lab_kode) }}
                         </td>
                         <td class="border px-2 py-1 text-center">{{ s.sesi }}</td>
                 </tr>

@@ -256,6 +256,17 @@ pub struct ToggleAktifForm {
     pub active: i8,
 }
 
+pub(super) fn lab_kode_valid(lab_kode: &str) -> bool {
+    lab_kode.len() == 2 && matches!(lab_kode.parse::<u8>(), Ok(1..=15))
+}
+
+pub(super) fn lab_kode_atau_default(lab_kode: Option<&str>) -> String {
+    lab_kode
+        .filter(|kode| lab_kode_valid(kode))
+        .unwrap_or("01")
+        .to_string()
+}
+
 fn flash_success(message: &str) -> HeaderMap {
     let mut headers = HeaderMap::new();
     headers.insert(
@@ -770,8 +781,8 @@ pub async fn ujian_generate_token(
         let headers = flash_error("Tahun token wajib diisi.");
         return (headers, Html(String::new())).into_response();
     }
-    if !matches!(lab_kode.as_str(), "01" | "02") {
-        let headers = flash_error("Lab token hanya boleh 01 atau 02.");
+    if !lab_kode_valid(&lab_kode) {
+        let headers = flash_error("Lab token harus antara Lab 1 sampai Lab 15.");
         return (headers, Html(String::new())).into_response();
     }
     if !(1..=4).contains(&sesi) {
@@ -1452,17 +1463,40 @@ pub async fn soal_delete(
         }
     };
 
+    // Serialize changes to one exam's question list.  Without this lock, two
+    // simultaneous deletes/additions can both calculate a different next
+    // number and leave `urutan` (and consequently the student's navigation)
+    // out of sync.
+    if let Err(e) = sqlx::query("SELECT id FROM ujian_soals WHERE ujian_id = ? FOR UPDATE")
+        .bind(ujian_id)
+        .fetch_all(&mut *tx)
+        .await
+    {
+        eprintln!("Error locking ujian_soals for delete: {:?}", e);
+        let _ = tx.rollback().await;
+        let headers = flash_error("Gagal menyiapkan penghapusan soal!");
+        return (headers, Html(String::new())).into_response();
+    }
+
     let unlink_result = sqlx::query("DELETE FROM ujian_soals WHERE ujian_id = ? AND soal_id = ?")
         .bind(ujian_id)
         .bind(soal_id)
         .execute(&mut *tx)
         .await;
 
-    if let Err(e) = unlink_result {
-        eprintln!("Error deleting ujian_soals relation: {:?}", e);
-        let _ = tx.rollback().await;
-        let headers = flash_error("Gagal menghapus relasi soal dari ujian!");
-        return (headers, Html(String::new())).into_response();
+    match unlink_result {
+        Ok(result) if result.rows_affected() == 1 => {}
+        Ok(_) => {
+            let _ = tx.rollback().await;
+            let headers = flash_error("Soal tidak ditemukan pada ujian ini atau sudah dihapus.");
+            return (headers, Html(String::new())).into_response();
+        }
+        Err(e) => {
+            eprintln!("Error deleting ujian_soals relation: {:?}", e);
+            let _ = tx.rollback().await;
+            let headers = flash_error("Gagal menghapus relasi soal dari ujian!");
+            return (headers, Html(String::new())).into_response();
+        }
     }
 
     if let Err(e) = reindex_ujian_soal_urutan(&mut tx, ujian_id).await {
@@ -1472,10 +1506,22 @@ pub async fn soal_delete(
         return (headers, Html(String::new())).into_response();
     }
 
-    let result = sqlx::query("DELETE FROM soals WHERE id = ?")
-        .bind(soal_id)
-        .execute(&mut *tx)
-        .await;
+    // A question may be linked to another exam.  Only remove its master row
+    // once it is no longer used anywhere; otherwise deleting it would also
+    // cascade-remove it from the other exam and desynchronize that exam.
+    let result = sqlx::query(
+        r#"
+        DELETE FROM soals
+        WHERE id = ?
+          AND NOT EXISTS (
+              SELECT 1 FROM ujian_soals WHERE soal_id = ?
+          )
+        "#,
+    )
+    .bind(soal_id)
+    .bind(soal_id)
+    .execute(&mut *tx)
+    .await;
 
     match result {
         Ok(_) => {
@@ -1484,7 +1530,10 @@ pub async fn soal_delete(
                 let headers = flash_error("Gagal menyimpan penghapusan soal!");
                 return (headers, Html(String::new())).into_response();
             }
-            let headers = flash_success("Soal berhasil dihapus!");
+            // Reload the detail page so its displayed count and sequence use
+            // the freshly reindexed rows too (not just the removed card).
+            let mut headers = flash_success("Soal berhasil dihapus!");
+            headers.insert("HX-Refresh", "true".parse().unwrap());
             (headers, Html(String::new())).into_response()
         }
         Err(e) => {
