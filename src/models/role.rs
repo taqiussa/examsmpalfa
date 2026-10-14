@@ -2,7 +2,6 @@
 pub enum Role {
     Admin,
     Guru,
-    Siswa,
     Konseling,
     Guest, // represents unauthenticated state
 }
@@ -13,18 +12,9 @@ impl Role {
         match s {
             "Admin" => Role::Admin,
             "Guru" => Role::Guru,
-            "Siswa" => Role::Siswa,
             "Konseling" => Role::Konseling,
             _ => Role::Guest,
         }
-    }
-
-    pub fn is_siswa(&self) -> bool {
-        matches!(self, Role::Siswa)
-    }
-
-    pub fn is_non_siswa(&self) -> bool {
-        !self.is_siswa()
     }
 
     pub fn is_guest(&self) -> bool {
@@ -39,9 +29,9 @@ mod tests {
     #[test]
     fn role_from_and_checks() {
         let admin = Role::from("Admin");
-        assert!(!admin.is_siswa());
+        assert!(matches!(admin, Role::Admin));
         let siswa = Role::from("Siswa");
-        assert!(siswa.is_siswa());
+        assert!(siswa.is_guest());
         let unknown = Role::from("Unknown");
         assert!(unknown.is_guest());
     }

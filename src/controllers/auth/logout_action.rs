@@ -3,13 +3,18 @@ use axum_extra::extract::cookie::{Cookie, CookieJar};
 use time::Duration;
 
 pub async fn logout_action(jar: CookieJar) -> impl IntoResponse {
-    let cookie = Cookie::build("user_id")
+    let cookie = Cookie::build("auth_identity")
         .path("/")
         .http_only(true)
         .max_age(Duration::seconds(0))
         .build(); // ⬅️ ganti finish() → build()
 
-    let jar = jar.remove(cookie);
+    let legacy_cookie = Cookie::build("user_id")
+        .path("/")
+        .http_only(true)
+        .max_age(Duration::seconds(0))
+        .build();
+    let jar = jar.remove(cookie).remove(legacy_cookie);
 
     (jar, Redirect::to("/login"))
 }
@@ -23,7 +28,7 @@ mod tests {
     #[tokio::test]
     async fn logout_action_clears_cookie_and_redirects() {
         let jar = CookieJar::new().add(
-            axum_extra::extract::cookie::Cookie::build(("user_id", "1"))
+            axum_extra::extract::cookie::Cookie::build(("auth_identity", "web.1"))
                 .path("/")
                 .build(),
         );

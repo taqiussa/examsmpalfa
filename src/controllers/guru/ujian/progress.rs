@@ -75,15 +75,13 @@ pub async fn ujian_progress(
     // Determine ujian_id to show: prefer explicit ujian_id, otherwise try to pick
     // the first ujian matching provided mata_pelajaran_id (if any)
     let mut ujian_to_show: Option<i64> = filter.ujian_id;
-    if ujian_to_show.is_none() {
-        if let Some(mapel_id) = filter.mata_pelajaran_id {
-            if let Some(found) = list_ujian
-                .iter()
-                .find(|u| u.mata_pelajaran_id == Some(mapel_id))
-            {
-                ujian_to_show = Some(found.id);
-            }
-        }
+    if ujian_to_show.is_none()
+        && let Some(mapel_id) = filter.mata_pelajaran_id
+        && let Some(found) = list_ujian
+            .iter()
+            .find(|u| u.mata_pelajaran_id == Some(mapel_id))
+    {
+        ujian_to_show = Some(found.id);
     }
 
     eprintln!(
@@ -210,7 +208,7 @@ pub async fn ujian_progress(
                     CAST(jp.total_nilai AS DOUBLE) as total_nilai,
                     DATE_FORMAT(jp.submitted_at, '%Y-%m-%d %H:%i') as submitted_at
                 FROM ujian_pesertas p
-                LEFT JOIN users u ON u.nis = p.nis
+                LEFT JOIN user_siswa u ON u.nis = p.nis
                 LEFT JOIN kelas k ON k.id = p.kelas_id
                 LEFT JOIN ujian_pengerjaans jp
                     ON jp.ujian_id = ?

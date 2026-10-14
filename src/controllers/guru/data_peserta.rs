@@ -105,7 +105,7 @@ pub async fn data_peserta_table(
         r#"
         SELECT COUNT(*)
         FROM ujian_pesertas p
-        LEFT JOIN users u ON u.nis = p.nis
+        LEFT JOIN user_siswa u ON u.nis = p.nis
         LEFT JOIN siswas s
             ON s.nis = p.nis
            AND s.tahun = p.tahun
@@ -142,7 +142,7 @@ pub async fn data_peserta_table(
             CAST(p.sesi AS SIGNED) AS sesi,
             CAST(p.gelombang AS SIGNED) AS gelombang
         FROM ujian_pesertas p
-        LEFT JOIN users u ON u.nis = p.nis
+        LEFT JOIN user_siswa u ON u.nis = p.nis
         LEFT JOIN siswas s
             ON s.nis = p.nis
            AND s.tahun = p.tahun

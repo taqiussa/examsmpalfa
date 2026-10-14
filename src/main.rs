@@ -25,6 +25,19 @@ async fn main() {
     // Database
     // =========================
     let db = config::database::connect().await;
+    let expiration_db = db.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            interval.tick().await;
+            if let Err(error) =
+                controllers::siswa::ujian_siswa::finalize_expired_sessions(&expiration_db).await
+            {
+                eprintln!("ERROR periodic exam finalizer: {error:?}");
+            }
+        }
+    });
 
     // =========================
     // Tera

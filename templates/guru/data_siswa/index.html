@@ -1,0 +1,34 @@
+{% extends "layouts/app.html" %}
+
+{% block content %}
+<div class="card space-y-6">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <h1 class="card-header">Data Siswa</h1>
+      <p class="mt-1 text-sm text-slate-500">Daftar siswa berdasarkan tahun ajaran dan kelas.</p>
+    </div>
+    <a href="/data-siswa/create" hx-boost="true" class="button bg-emerald-600 text-white hover:bg-emerald-700">Tambah Siswa</a>
+  </div>
+  <form id="data-siswa-filter" class="flex flex-wrap items-end gap-3" hx-get="/data-siswa/table" hx-target="#siswa-table" hx-trigger="change from:select" hx-push-url="true">
+    <div>
+      <label for="tahun" class="mb-1 block text-sm font-medium text-slate-700">Tahun Ajaran</label>
+      <select id="tahun" name="tahun" class="input min-w-48">
+        {% for tahun in data.list_tahun %}
+          <option value="{{ tahun }}" {% if data.tahun == tahun %}selected{% endif %}>{{ tahun }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="kelas_id" class="mb-1 block text-sm font-medium text-slate-700">Filter Kelas</label>
+      <select id="kelas_id" name="kelas_id" class="input min-w-48">
+        <option value="">Semua Kelas</option>
+        {% for kelas in data.kelas %}
+          <option value="{{ kelas.id }}" {% if data.kelas_id == kelas.id %}selected{% endif %}>{{ kelas.nama }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <noscript><button type="submit" formaction="/data-siswa" formmethod="get" class="button bg-slate-700 text-white hover:bg-slate-800">Terapkan</button></noscript>
+  </form>
+  <div id="siswa-table" class="overflow-x-auto" hx-get="/data-siswa/table" hx-trigger="load" hx-include="#data-siswa-filter"></div>
+</div>
+{% endblock %}

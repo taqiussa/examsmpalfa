@@ -108,7 +108,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/tambah-pengguna")
-                    .header("cookie", format!("user_id={}", seed.guru_id))
+                    .header("cookie", format!("auth_identity=web.{}", seed.guru_id))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -133,7 +133,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/upload-peserta")
-                    .header("cookie", format!("user_id={}", seed.guru_id))
+                    .header("cookie", format!("auth_identity=web.{}", seed.guru_id))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -145,7 +145,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/upload-peserta")
-                    .header("cookie", format!("user_id={}", seed.admin_id))
+                    .header("cookie", format!("auth_identity=web.{}", seed.admin_id))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -153,6 +153,42 @@ mod tests {
             .unwrap();
         assert_eq!(admin_response.status(), StatusCode::FORBIDDEN);
 
+        test_db.teardown().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn web_and_siswa_accounts_cannot_cross_protected_areas() {
+        let Some(test_db) = crate::test_support::TestDb::try_new().await else {
+            return;
+        };
+        let seed = crate::test_support::seed_base_data(&test_db.pool).await;
+        let app = build_app(test_db.pool.clone());
+
+        let siswa_to_admin = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/tambah-pengguna")
+                    .header("cookie", format!("auth_identity=siswa.{}", seed.siswa_id))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let guru_to_siswa = app
+            .oneshot(
+                Request::builder()
+                    .uri("/siswa/ujian")
+                    .header("cookie", format!("auth_identity=web.{}", seed.guru_id))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(siswa_to_admin.status(), StatusCode::FORBIDDEN);
+        assert_eq!(guru_to_siswa.status(), StatusCode::FORBIDDEN);
         test_db.teardown().await;
     }
 }

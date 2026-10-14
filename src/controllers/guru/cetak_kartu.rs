@@ -90,7 +90,7 @@ pub async fn cetak_kartu_print(
             CAST(p.gelombang AS SIGNED) AS gelombang
         FROM siswas s
         INNER JOIN kelas k ON k.id = s.kelas_id
-        LEFT JOIN users u ON u.nis = s.nis
+        LEFT JOIN user_siswa u ON u.nis = s.nis
         LEFT JOIN ujian_pesertas p ON p.id = (
             SELECT p2.id
             FROM ujian_pesertas p2

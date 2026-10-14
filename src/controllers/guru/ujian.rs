@@ -1433,7 +1433,7 @@ pub async fn soal_image_upload(
         .send()
         .await;
 
-    if let Err(_) = result {
+    if result.is_err() {
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
             "Gagal upload ke storage.",

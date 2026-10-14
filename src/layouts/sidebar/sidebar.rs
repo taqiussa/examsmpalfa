@@ -1,5 +1,5 @@
 use crate::layouts::sidebar::menus;
-use crate::models::auth_user::AuthUser;
+use crate::models::auth_user::{AccountType, AuthUser};
 use crate::models::role::Role;
 use serde::Serialize;
 
@@ -18,7 +18,7 @@ pub struct LayoutUser {
 impl LayoutContext {
     pub fn with_user(user: &AuthUser, current_path: &str) -> Self {
         Self {
-            sidebar: build_sidebar(&user.roles, current_path),
+            sidebar: build_sidebar(user.account_type, &user.roles, current_path),
             user: Some(LayoutUser {
                 name: user.name.clone(),
                 foto: user.foto.clone(),
@@ -35,12 +35,14 @@ pub struct SidebarItem {
     pub active: bool,
 }
 
-pub fn build_sidebar(roles: &[Role], current_path: &str) -> Vec<SidebarItem> {
+pub fn build_sidebar(
+    account_type: AccountType,
+    roles: &[Role],
+    current_path: &str,
+) -> Vec<SidebarItem> {
     let mut items: Vec<SidebarItem> = Vec::new();
 
-    let has_siswa = roles.iter().any(Role::is_siswa);
-
-    if !has_siswa {
+    if account_type == AccountType::Web {
         items.extend(menus::common::menu(current_path));
     }
 
@@ -75,7 +77,7 @@ pub fn build_sidebar(roles: &[Role], current_path: &str) -> Vec<SidebarItem> {
         items.extend(menus::wali_kelas::menu(current_path));
     }
 
-    if roles.iter().any(|r| matches!(r, Role::Siswa)) {
+    if account_type == AccountType::Siswa {
         items.push(SidebarItem {
             kind: "header",
             label: "Siswa",
@@ -92,11 +94,11 @@ pub fn build_sidebar(roles: &[Role], current_path: &str) -> Vec<SidebarItem> {
 #[cfg(test)]
 mod tests {
     use super::build_sidebar;
-    use crate::models::role::Role;
+    use crate::models::{auth_user::AccountType, role::Role};
 
     #[test]
     fn build_sidebar_for_admin_includes_admin_header() {
-        let items = build_sidebar(&[Role::Admin], "/dashboard");
+        let items = build_sidebar(AccountType::Web, &[Role::Admin], "/dashboard");
         assert!(
             items
                 .iter()
@@ -107,7 +109,7 @@ mod tests {
 
     #[test]
     fn build_sidebar_for_siswa_only_has_siswa_section() {
-        let items = build_sidebar(&[Role::Siswa], "/siswa");
+        let items = build_sidebar(AccountType::Siswa, &[], "/siswa");
         assert!(
             items
                 .iter()

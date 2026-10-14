@@ -138,7 +138,7 @@ pub async fn status_peserta_table(
                 CAST(p.gelombang AS SIGNED) as gelombang,
                 COALESCE(jp.status, 'not_started') as status
             FROM ujian_pesertas p
-            LEFT JOIN users u ON u.nis = p.nis
+            LEFT JOIN user_siswa u ON u.nis = p.nis
             LEFT JOIN kelas k ON k.id = p.kelas_id
             LEFT JOIN ujian_pengerjaans jp
                 ON jp.ujian_id = ?

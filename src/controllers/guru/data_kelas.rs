@@ -444,6 +444,7 @@ mod tests {
         PageContext {
             user: AuthUser {
                 id: 1,
+                account_type: crate::models::auth_user::AccountType::Web,
                 nis: None,
                 roles: vec![Role::Guru],
                 name: "Guru".into(),

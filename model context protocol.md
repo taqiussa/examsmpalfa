@@ -22,19 +22,22 @@ Dokumen ini merangkum pemahaman tentang repo `/home/taqius/rust/examelemenka` ag
 2. Router utama di `src/routes/web_routes.rs`:
    - `public_routes()` (guest) untuk login.
    - `authenticated` (auth) dengan `auth_middleware`.
-   - Role-based: `admin_routes`, `guru_routes`, `siswa_routes` dengan `role_middleware`.
+   - Area pegawai memakai `role_middleware`; area siswa memakai `account_middleware`.
 3. Rendering via `PageContext` (`src/utils/page_context.rs`) dan `render()` (`src/utils/render.rs`).
 
 ## Auth & Middleware
 - Login: `src/controllers/auth/login_action.rs`.
-  - Username/nis → query `users` → bcrypt verify → set cookie `user_id`.
+  - Username → `users`; NIS numerik → `user_siswa`; bcrypt verify → set cookie identitas bertipe `auth_identity`.
 - Logout: `src/controllers/auth/logout_action.rs`.
 - Auth middleware: `src/middlewares/auth_middleware.rs`.
-  - Ambil `user_id` cookie → query roles (`roles`, `model_has_roles`) → query `users` → inject `AuthUser`.
+  - Cookie `web.<id>` membaca `users` dan role Spatie guard `web`.
+  - Cookie `siswa.<id>` membaca `user_siswa` tanpa role Spatie.
 - Role middleware: `src/middlewares/role_middleware.rs`.
-  - Cek `AllowedRoles`, render `errors/403.html` jika tidak allowed.
+  - Hanya untuk akun web; cek `AllowedRoles` dan tolak akun siswa.
+- Account middleware: `src/middlewares/account_middleware.rs`.
+  - Melindungi route ujian agar hanya dapat diakses identitas `AccountType::Siswa`.
 - Guest middleware: `src/middlewares/guest_middleware.rs`.
-  - Redirect ke `/dashboard` jika sudah login.
+  - Redirect akun web ke `/dashboard` dan akun siswa ke `/siswa/ujian`.
 
 ## Layouting & Tera
 - Layout utama:
@@ -76,7 +79,7 @@ Migrasi di `migrations/` fokus pada domain ujian:
 9. `20260220000009_backfill_ujian_tahun.sql`
    - backfill `tahun` dari `tanggal`.
 
-Catatan: Tabel lain (`users`, `roles`, `model_has_roles`, `kelas`, `siswas`, `biodatas`, `absensis`, `mata_pelajarans`) tidak ada di migrasi repo ini, diasumsikan sudah ada di DB eksternal/legacy. Skema test ada di `src/test_support.rs`.
+Catatan: Tabel lain (`users`, `user_siswa`, `roles`, `model_has_roles`, `kelas`, `siswas`, `biodatas`, `absensis`, `mata_pelajarans`) tidak ada di migrasi repo ini, diasumsikan sudah ada di DB eksternal/legacy. `users` khusus akun web/pegawai; `user_siswa` khusus akun autentikasi siswa. Skema test ada di `src/test_support.rs`.
 
 ## Docker
 - `Dockerfile`: multi-stage (FE build → Rust build → runtime).

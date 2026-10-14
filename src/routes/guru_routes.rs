@@ -19,6 +19,10 @@ use crate::{
             data_kelas_store, data_kelas_update,
         },
         data_peserta::{data_peserta, data_peserta_table},
+        data_siswa::{
+            data_siswa_create, data_siswa_destroy, data_siswa_edit, data_siswa_index,
+            data_siswa_store, data_siswa_table, data_siswa_update,
+        },
         mata_pelajaran::{
             mata_pelajaran_create, mata_pelajaran_edit, mata_pelajaran_index, mata_pelajaran_store,
             mata_pelajaran_update,
@@ -57,6 +61,13 @@ pub fn guru_only_routes() -> Router {
         .route("/data-kelas/{id}/edit", get(data_kelas_edit))
         .route("/data-kelas/{id}", post(data_kelas_update))
         .route("/data-kelas/{id}/delete", post(data_kelas_destroy))
+        .route("/data-siswa", get(data_siswa_index))
+        .route("/data-siswa/table", get(data_siswa_table))
+        .route("/data-siswa", post(data_siswa_store))
+        .route("/data-siswa/create", get(data_siswa_create))
+        .route("/data-siswa/{id}/edit", get(data_siswa_edit))
+        .route("/data-siswa/{id}", post(data_siswa_update))
+        .route("/data-siswa/{id}/delete", post(data_siswa_destroy))
         .route(
             "/upload-data-siswa/preview",
             post(upload_data_siswa_preview)

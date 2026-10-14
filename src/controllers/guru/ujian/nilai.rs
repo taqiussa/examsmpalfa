@@ -154,7 +154,7 @@ async fn fetch_nilai_kelas_rows(
                 CAST(0 AS DOUBLE) as total_nilai
             FROM siswas s
             JOIN kelas k ON k.id = s.kelas_id
-            LEFT JOIN users u ON u.nis = s.nis
+            LEFT JOIN user_siswa u ON u.nis = s.nis
             WHERE s.kelas_id = ?
               AND s.tahun = ?
             ORDER BY u.name IS NULL, u.name ASC, s.nis ASC

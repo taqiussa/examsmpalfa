@@ -59,6 +59,7 @@ mod tests {
 
         parts.extensions.insert(AuthUser {
             id: 1,
+            account_type: crate::models::auth_user::AccountType::Web,
             nis: None,
             roles: vec![Role::Admin],
             name: "Admin".into(),

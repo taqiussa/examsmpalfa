@@ -78,6 +78,7 @@ pub fn build_test_tera() -> Tera {
 pub struct SeedData {
     pub admin_id: u64,
     pub guru_id: u64,
+    pub siswa_id: u64,
     pub kelas_id: i64,
     pub nis: String,
     pub tahun: String,
@@ -91,8 +92,8 @@ pub async fn seed_base_data(pool: &MySqlPool) -> SeedData {
 
     sqlx::query(
         r#"
-        INSERT INTO roles (name) VALUES
-        ('Admin'), ('Guru'), ('Siswa'), ('Konseling')
+        INSERT INTO roles (name, guard_name) VALUES
+        ('Admin', 'web'), ('Guru', 'web'), ('Konseling', 'web')
         "#,
     )
     .execute(&mut *tx)
@@ -132,8 +133,8 @@ pub async fn seed_base_data(pool: &MySqlPool) -> SeedData {
     let nis = "12345".to_string();
     sqlx::query(
         r#"
-        INSERT INTO users (name, username, password, nis, created_at, updated_at)
-        VALUES ('Siswa User', 'siswa', ?, ?, NOW(), NOW())
+        INSERT INTO user_siswa (name, password, nis, created_at, updated_at)
+        VALUES ('Siswa User', ?, ?, NOW(), NOW())
         "#,
     )
     .bind(&password)
@@ -156,19 +157,11 @@ pub async fn seed_base_data(pool: &MySqlPool) -> SeedData {
             .fetch_one(&mut *tx)
             .await
             .unwrap();
-    let role_siswa_id: i64 =
-        sqlx::query_scalar("SELECT CAST(id AS SIGNED) FROM roles WHERE name = 'Siswa'")
-            .fetch_one(&mut *tx)
-            .await
-            .unwrap();
-
-    sqlx::query("INSERT INTO model_has_roles (role_id, model_id) VALUES (?, ?), (?, ?), (?, ?)")
+    sqlx::query("INSERT INTO model_has_roles (role_id, model_id) VALUES (?, ?), (?, ?)")
         .bind(role_admin_id)
         .bind(admin_id)
         .bind(role_guru_id)
         .bind(guru_id)
-        .bind(role_siswa_id)
-        .bind(siswa_id)
         .execute(&mut *tx)
         .await
         .unwrap();
@@ -222,6 +215,7 @@ pub async fn seed_base_data(pool: &MySqlPool) -> SeedData {
     SeedData {
         admin_id: admin_id as u64,
         guru_id: guru_id as u64,
+        siswa_id: siswa_id as u64,
         kelas_id: kelas_id as i64,
         nis,
         tahun,
@@ -236,14 +230,27 @@ async fn init_schema(pool: &MySqlPool) {
             username VARCHAR(255),
             password VARCHAR(255) NOT NULL,
             nis BIGINT UNIQUE,
+            jenis_kelamin VARCHAR(10),
             foto VARCHAR(255),
             created_at DATETIME,
             updated_at DATETIME
         );
 
+        CREATE TABLE user_siswa (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            nis MEDIUMINT UNSIGNED NOT NULL UNIQUE,
+            jenis_kelamin VARCHAR(1),
+            password VARCHAR(255) NOT NULL,
+            remember_token VARCHAR(100),
+            created_at TIMESTAMP NULL,
+            updated_at TIMESTAMP NULL
+        );
+
         CREATE TABLE roles (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            name VARCHAR(100) NOT NULL
+            name VARCHAR(100) NOT NULL,
+            guard_name VARCHAR(255) NOT NULL DEFAULT 'web'
         );
 
         CREATE TABLE model_has_roles (
@@ -263,7 +270,7 @@ async fn init_schema(pool: &MySqlPool) {
 
         CREATE TABLE siswas (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            nis BIGINT,
+            nis MEDIUMINT UNSIGNED,
             tahun VARCHAR(20) NOT NULL,
             kelas_id BIGINT UNSIGNED NOT NULL,
             tingkat INT NOT NULL,

@@ -89,7 +89,7 @@ pub async fn ujian_uraian_table(
             FROM ujian_jawabans j
             JOIN soals s ON s.id = j.soal_id
             JOIN ujians uj ON uj.id = j.ujian_id
-            LEFT JOIN users u ON u.nis = j.nis
+            LEFT JOIN user_siswa u ON u.nis = j.nis
             LEFT JOIN siswas sw ON sw.nis = j.nis AND sw.tahun = uj.tahun
             LEFT JOIN kelas k ON k.id = sw.kelas_id
             WHERE s.kategori = 'Uraian'

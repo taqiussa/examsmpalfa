@@ -7,9 +7,14 @@ use axum::{
 use axum_extra::extract::cookie::CookieJar;
 
 pub async fn guest_middleware(jar: CookieJar, req: Request<Body>, next: Next) -> Response {
-    if jar.get("user_id").is_some() {
+    if let Some(identity) = jar.get("auth_identity") {
         // sudah login → jangan ke login page
-        return Redirect::to("/dashboard").into_response();
+        let redirect = if identity.value().starts_with("siswa.") {
+            "/siswa/ujian"
+        } else {
+            "/dashboard"
+        };
+        return Redirect::to(redirect).into_response();
     }
 
     next.run(req).await
@@ -61,7 +66,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/login")
-                    .header("cookie", "user_id=1")
+                    .header("cookie", "auth_identity=web.1")
                     .body(Body::empty())
                     .unwrap(),
             )

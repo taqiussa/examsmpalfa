@@ -1,6 +1,9 @@
 use crate::{
     layouts::sidebar::LayoutContext,
-    models::{auth_user::AuthUser, role::Role},
+    models::{
+        auth_user::{AccountType, AuthUser},
+        role::Role,
+    },
     utils::vite,
 };
 use axum::{
@@ -25,6 +28,10 @@ pub async fn role_middleware(req: Request<Body>, next: Next) -> Response {
         None => return next.run(req).await,
     };
 
+    if user.account_type != AccountType::Web {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+
     let is_allowed = user.roles.iter().any(|r| allowed.0.contains(r));
 
     if !is_allowed {
@@ -47,7 +54,10 @@ pub async fn role_middleware(req: Request<Body>, next: Next) -> Response {
 #[cfg(test)]
 mod tests {
     use super::{AllowedRoles, role_middleware};
-    use crate::models::{auth_user::AuthUser, role::Role};
+    use crate::models::{
+        auth_user::{AccountType, AuthUser},
+        role::Role,
+    };
     use axum::{
         Extension, Router,
         body::{Body, to_bytes},
@@ -70,6 +80,7 @@ mod tests {
             .layer(Extension(crate::test_support::build_test_tera()))
             .layer(Extension(AuthUser {
                 id: 1,
+                account_type: AccountType::Web,
                 nis: None,
                 roles: vec![Role::Admin],
                 name: "Admin".into(),
@@ -98,6 +109,7 @@ mod tests {
             .layer(Extension(crate::test_support::build_test_tera()))
             .layer(Extension(AuthUser {
                 id: 2,
+                account_type: AccountType::Web,
                 nis: None,
                 roles: vec![Role::Guru],
                 name: "Guru".into(),

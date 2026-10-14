@@ -23,9 +23,8 @@ use crate::{
 
 const MAX_FILE_BYTES: usize = 5 * 1024 * 1024;
 const MAX_IMPORT_ROWS: usize = 2_000;
-const MAX_NIS: i64 = 16_777_215;
+const MAX_NIS: u32 = 16_777_215;
 const DEFAULT_PASSWORD: &str = "12345678";
-const USER_MODEL_TYPE: &str = "App\\Models\\User";
 
 #[derive(Debug, Clone, Serialize, FromRow)]
 struct KelasDbRow {
@@ -55,7 +54,7 @@ struct RawStudentRow {
 struct ImportStudentRow {
     row_number: usize,
     name: String,
-    nis: i64,
+    nis: u32,
     kelas_id: i64,
     tingkat: i32,
     tahun: String,
@@ -109,7 +108,7 @@ struct ImportFailure {
 #[derive(Serialize)]
 struct ImportFailureRow {
     row_number: usize,
-    nis: i64,
+    nis: u32,
     name: String,
     error: String,
 }
@@ -156,13 +155,12 @@ pub async fn download_draft_data_siswa(
             .into_response();
     }
 
-    let used_nis =
-        sqlx::query_scalar::<_, i64>("SELECT CAST(nis AS SIGNED) FROM users WHERE nis IS NOT NULL")
-            .fetch_all(&db)
-            .await
-            .unwrap_or_default()
-            .into_iter()
-            .collect::<HashSet<_>>();
+    let used_nis = sqlx::query_scalar::<_, u32>("SELECT nis FROM user_siswa WHERE nis IS NOT NULL")
+        .fetch_all(&db)
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .collect::<HashSet<_>>();
 
     let bytes = match build_draft_xlsx(&kelas, &used_nis, &data_tahun()) {
         Ok(bytes) => bytes,
@@ -451,7 +449,7 @@ fn validate_rows(raw_rows: Vec<RawStudentRow>, kelas: &[KelasRef]) -> Validation
     }
 }
 
-fn parse_nis(value: &str, errors: &mut Vec<String>) -> Option<i64> {
+fn parse_nis(value: &str, errors: &mut Vec<String>) -> Option<u32> {
     if value.is_empty() {
         errors.push("nis wajib diisi".to_string());
         return None;
@@ -467,7 +465,7 @@ fn parse_nis(value: &str, errors: &mut Vec<String>) -> Option<i64> {
         );
         return None;
     }
-    match value.parse::<i64>() {
+    match value.parse::<u32>() {
         Ok(nis) if (1..=MAX_NIS).contains(&nis) => Some(nis),
         _ => {
             errors.push(format!("nis harus berada pada rentang 1 sampai {MAX_NIS}"));
@@ -587,19 +585,8 @@ async fn execute_import_transaction(
     rows: &[ImportStudentRow],
     password_hash: &str,
 ) -> Result<ImportSummary, ImportFailure> {
-    let siswa_role_id = sqlx::query_scalar::<_, i64>(
-        "SELECT CAST(id AS SIGNED) FROM roles WHERE name = 'Siswa' LIMIT 1",
-    )
-    .fetch_optional(&mut **tx)
-    .await
-    .map_err(|error| {
-        eprintln!("ERROR import siswa role query: {error:?}");
-        ImportFailure::general("Gagal membaca konfigurasi role Siswa.")
-    })?
-    .ok_or_else(|| ImportFailure::general("Role Siswa belum tersedia di database."))?;
-
     let mut existing_users =
-        sqlx::query_scalar::<_, i64>("SELECT CAST(nis AS SIGNED) FROM users WHERE nis IS NOT NULL")
+        sqlx::query_scalar::<_, u32>("SELECT nis FROM user_siswa WHERE nis IS NOT NULL")
             .fetch_all(&mut **tx)
             .await
             .map_err(|error| {
@@ -609,8 +596,8 @@ async fn execute_import_transaction(
             .into_iter()
             .collect::<HashSet<_>>();
 
-    let existing_student_rows = sqlx::query_as::<_, (i64, i64, String)>(
-        "SELECT CAST(id AS SIGNED), CAST(nis AS SIGNED), CAST(tahun AS CHAR) FROM siswas WHERE nis IS NOT NULL FOR UPDATE",
+    let existing_student_rows = sqlx::query_as::<_, (u64, u32, String)>(
+        "SELECT id, nis, CAST(tahun AS CHAR) FROM siswas WHERE nis IS NOT NULL FOR UPDATE",
     )
     .fetch_all(&mut **tx)
     .await
@@ -634,9 +621,9 @@ async fn execute_import_transaction(
 
     for row in rows {
         let user_was_existing = existing_users.contains(&row.nis);
-        let user_result = sqlx::query(
+        sqlx::query(
             r#"
-            INSERT INTO users (name, nis, password, created_at, updated_at)
+            INSERT INTO user_siswa (name, nis, password, created_at, updated_at)
             VALUES (?, ?, ?, NOW(), NOW())
             ON DUPLICATE KEY UPDATE
                 id = LAST_INSERT_ID(id),
@@ -655,23 +642,6 @@ async fn execute_import_transaction(
                 row.row_number, row.nis
             );
             ImportFailure::for_row(row, "Pengguna gagal disimpan.")
-        })?;
-        let user_id = user_result.last_insert_id() as i64;
-
-        sqlx::query(
-            "INSERT IGNORE INTO model_has_roles (role_id, model_type, model_id) VALUES (?, ?, ?)",
-        )
-        .bind(siswa_role_id)
-        .bind(USER_MODEL_TYPE)
-        .bind(user_id)
-        .execute(&mut **tx)
-        .await
-        .map_err(|error| {
-            eprintln!(
-                "ERROR import role row {} nis {}: {error:?}",
-                row.row_number, row.nis
-            );
-            ImportFailure::for_row(row, "Role Siswa gagal disimpan.")
         })?;
 
         if user_was_existing {
@@ -724,7 +694,7 @@ async fn execute_import_transaction(
                 );
                 ImportFailure::for_row(row, "Data siswa gagal disimpan.")
             })?;
-            existing_students.insert(student_key, result.last_insert_id() as i64);
+            existing_students.insert(student_key, result.last_insert_id());
             summary.siswa_baru += 1;
         }
     }
@@ -820,10 +790,10 @@ fn render_import_failure(
 
 fn build_draft_xlsx(
     kelas: &[KelasRef],
-    used_nis: &HashSet<i64>,
+    used_nis: &HashSet<u32>,
     tahun: &str,
 ) -> Result<Vec<u8>, zip::result::ZipError> {
-    let mut first_nis = 9_000_000 + (Uuid::new_v4().as_u128() % 6_000_000) as i64;
+    let mut first_nis = 9_000_000 + (Uuid::new_v4().as_u128() % 6_000_000) as u32;
     while used_nis.contains(&first_nis) {
         first_nis = if first_nis >= 14_999_999 {
             9_000_000
@@ -1141,7 +1111,7 @@ mod tests {
     #[test]
     fn draft_contains_real_class_reference_and_only_dummy_identity() {
         let classes = kelas_fixture();
-        let actual_nis = HashSet::from([9_000_000_i64, 9_000_001_i64, 9_000_002_i64]);
+        let actual_nis = HashSet::from([9_000_000_u32, 9_000_001_u32, 9_000_002_u32]);
         let bytes = build_draft_xlsx(&classes, &actual_nis, "2026 / 2027").unwrap();
         let mut workbook = open_workbook_auto_from_rs(Cursor::new(bytes.clone())).unwrap();
 
@@ -1153,7 +1123,7 @@ mod tests {
             Some(&Data::String("Contoh Siswa A".to_string()))
         );
         let dummy_nis = super::cell_to_string(data.get((1, 1)).unwrap())
-            .parse::<i64>()
+            .parse::<u32>()
             .unwrap();
         assert!(!actual_nis.contains(&dummy_nis));
 
@@ -1222,11 +1192,12 @@ mod tests {
             .fetch_one(&test_db.pool)
             .await
             .unwrap();
-        let old_password: String = sqlx::query_scalar("SELECT password FROM users WHERE nis = ?")
-            .bind(&seed.nis)
-            .fetch_one(&test_db.pool)
-            .await
-            .unwrap();
+        let old_password: String =
+            sqlx::query_scalar("SELECT password FROM user_siswa WHERE nis = ?")
+                .bind(&seed.nis)
+                .fetch_one(&test_db.pool)
+                .await
+                .unwrap();
 
         let rows = vec![
             ImportStudentRow {
@@ -1255,7 +1226,7 @@ mod tests {
         assert_eq!(summary.siswa_diperbarui, 1);
 
         let existing: (String, String) =
-            sqlx::query_as("SELECT name, password FROM users WHERE nis = ?")
+            sqlx::query_as("SELECT name, password FROM user_siswa WHERE nis = ?")
                 .bind(&seed.nis)
                 .fetch_one(&test_db.pool)
                 .await
@@ -1263,25 +1234,26 @@ mod tests {
         assert_eq!(existing.0, "Nama Siswa Diperbarui");
         assert_eq!(existing.1, old_password);
 
-        let new_user: (i64, String) =
-            sqlx::query_as("SELECT CAST(id AS SIGNED), password FROM users WHERE nis = 2699001")
-                .fetch_one(&test_db.pool)
-                .await
-                .unwrap();
+        let new_user: (i64, String) = sqlx::query_as(
+            "SELECT CAST(id AS SIGNED), password FROM user_siswa WHERE nis = 2699001",
+        )
+        .fetch_one(&test_db.pool)
+        .await
+        .unwrap();
         assert!(verify("12345678", &new_user.1).unwrap());
         let role_count: i64 = sqlx::query_scalar(
             r#"
             SELECT COUNT(*)
             FROM model_has_roles m
             JOIN roles r ON r.id = m.role_id
-            WHERE m.model_id = ? AND m.model_type = 'App\\Models\\User' AND r.name = 'Siswa'
+            WHERE m.model_id = ? AND r.name = 'Siswa'
             "#,
         )
         .bind(new_user.0)
         .fetch_one(&test_db.pool)
         .await
         .unwrap();
-        assert_eq!(role_count, 1);
+        assert_eq!(role_count, 0);
 
         let existing_student: (i64, i32, String) = sqlx::query_as(
             "SELECT CAST(kelas_id AS SIGNED), CAST(tingkat AS SIGNED), tahun FROM siswas WHERE nis = ? AND tahun = ?",
@@ -1341,10 +1313,11 @@ mod tests {
         )
         .await;
         assert!(result.is_err());
-        let user_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE nis = 2699099")
-            .fetch_one(&test_db.pool)
-            .await
-            .unwrap();
+        let user_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM user_siswa WHERE nis = 2699099")
+                .fetch_one(&test_db.pool)
+                .await
+                .unwrap();
         assert_eq!(user_count, 0);
 
         test_db.teardown().await;
@@ -1363,6 +1336,7 @@ mod tests {
             .layer(Extension(tera.clone()))
             .layer(Extension(AuthUser {
                 id: 1,
+                account_type: crate::models::auth_user::AccountType::Web,
                 nis: None,
                 roles: vec![Role::Guru],
                 name: "Guru".to_string(),
@@ -1385,6 +1359,7 @@ mod tests {
             .layer(Extension(tera))
             .layer(Extension(AuthUser {
                 id: 2,
+                account_type: crate::models::auth_user::AccountType::Web,
                 nis: None,
                 roles: vec![Role::Admin],
                 name: "Admin".to_string(),

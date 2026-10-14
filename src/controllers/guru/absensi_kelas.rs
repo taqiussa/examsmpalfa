@@ -280,7 +280,7 @@ async fn render_table(
             CAST(a.id AS SIGNED) AS absensi_id,
             CAST(g.name AS CHAR) AS guru_nama
         FROM siswas s
-        JOIN users u ON u.nis = s.nis
+        JOIN user_siswa u ON u.nis = s.nis
         JOIN kelas k ON k.id = s.kelas_id
         LEFT JOIN absensis a
             ON a.nis = s.nis
@@ -453,6 +453,7 @@ mod tests {
         PageContext {
             user: AuthUser {
                 id: 1,
+                account_type: crate::models::auth_user::AccountType::Web,
                 nis: None,
                 roles: vec![Role::Guru],
                 name: "Guru".into(),

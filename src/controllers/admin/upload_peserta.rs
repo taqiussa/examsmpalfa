@@ -263,12 +263,9 @@ pub async fn upload_peserta_action(
 
     while let Ok(Some(field)) = multipart.next_field().await {
         let name = field.name().unwrap_or("").to_string();
-        match name.as_str() {
-            "file" => {
-                file_name = field.file_name().unwrap_or("").to_string();
-                file_bytes = field.bytes().await.unwrap_or_default().to_vec();
-            }
-            _ => {}
+        if name == "file" {
+            file_name = field.file_name().unwrap_or("").to_string();
+            file_bytes = field.bytes().await.unwrap_or_default().to_vec();
         }
     }
 
@@ -559,11 +556,7 @@ fn get_required_i32(
 }
 
 fn normalize_header(value: &str) -> String {
-    value
-        .trim()
-        .to_lowercase()
-        .replace(' ', "_")
-        .replace('-', "_")
+    value.trim().to_lowercase().replace([' ', '-'], "_")
 }
 
 fn parse_lab_code(value: &str, row_number: usize) -> Result<String, String> {

@@ -241,31 +241,38 @@
     });
 
     const deadline = Number({{ data.timer_deadline_ms }});
+    const serverNowAtRender = Number({{ data.timer_server_now_ms }});
+    const clientMonotonicAtRender = performance.now();
     const countdown = document.getElementById('countdown');
     let autoSubmitted = false;
 
     function formatMs(ms) {
       const total = Math.max(0, Math.floor(ms / 1000));
-      const m = Math.floor(total / 60).toString().padStart(2, '0');
+      const hours = Math.floor(total / 3600);
+      const m = Math.floor((total % 3600) / 60).toString().padStart(2, '0');
       const s = (total % 60).toString().padStart(2, '0');
-      return `${m}:${s}`;
+      return hours > 0 ? `${hours.toString().padStart(2, '0')}:${m}:${s}` : `${m}:${s}`;
     }
 
     function tick() {
-      const remain = deadline - Date.now();
+      const estimatedServerNow = serverNowAtRender + (performance.now() - clientMonotonicAtRender);
+      const remain = deadline - estimatedServerNow;
       if (countdown) {
         countdown.textContent = `Sisa waktu: ${formatMs(remain)}`;
       }
       if (remain <= 0 && !autoSubmitted) {
         autoSubmitted = true;
-        const collected = collectPilihan();
-        pilihanInput.value = collected.value || '';
-        submitForm.requestSubmit();
+        if (countdown) countdown.textContent = 'Waktu habis. Ujian sedang dikumpulkan otomatis…';
+        document.querySelectorAll('button, input, textarea').forEach(function (element) {
+          element.disabled = true;
+        });
+        HTMLFormElement.prototype.submit.call(submitForm);
       }
     }
 
     tick();
-    setInterval(tick, 1000);
+    if (window.examCountdownInterval) clearInterval(window.examCountdownInterval);
+    window.examCountdownInterval = setInterval(tick, 1000);
   });
 </script>
 {% endblock %}

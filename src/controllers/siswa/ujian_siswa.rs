@@ -3,13 +3,12 @@ use std::collections::HashMap;
 use axum::{
     Extension, Form,
     extract::{Path, Query},
-    http::HeaderMap,
+    http::{HeaderMap, StatusCode},
     response::{Html, IntoResponse, Redirect, Response},
 };
 use bytes::Bytes;
-use chrono::{Duration, NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{FromRow, MySqlPool};
+use sqlx::{FromRow, MySql, MySqlPool, Transaction};
 
 use crate::utils::{page_context::PageContext, render::render, tahun::data_tahun};
 
@@ -283,6 +282,7 @@ struct UjianSessionData {
     nomor_saat_ini: i32,
     total_soal: i32,
     timer_deadline_ms: i64,
+    timer_server_now_ms: i64,
     current: Option<SoalView>,
     nav: Vec<SoalNav>,
 }
@@ -320,9 +320,10 @@ struct SessionHeaderRow {
     ujian_id: i64,
     ujian_title: String,
     waktu_menit: i32,
-    started_at: NaiveDateTime,
     last_nomor: i32,
     status: String,
+    timer_deadline_ms: i64,
+    timer_server_now_ms: i64,
 }
 
 #[derive(FromRow)]
@@ -360,9 +361,10 @@ pub async fn ujian_session_page(
             p.ujian_id,
             u.title as ujian_title,
             u.waktu_menit,
-            p.started_at,
             p.last_nomor,
-            p.status
+            p.status,
+            CAST(UNIX_TIMESTAMP(TIMESTAMPADD(MINUTE, u.waktu_menit, p.started_at)) * 1000 AS SIGNED) AS timer_deadline_ms,
+            CAST(UNIX_TIMESTAMP(NOW(3)) * 1000 AS SIGNED) AS timer_server_now_ms
         FROM ujian_pengerjaans p
         JOIN ujians u ON u.id = p.ujian_id
         WHERE p.id = ? AND p.nis = ?
@@ -384,13 +386,14 @@ pub async fn ujian_session_page(
             .into_response();
     }
 
-    let deadline = header.started_at + Duration::minutes(header.waktu_menit as i64);
-    if Utc::now().naive_utc() > deadline {
+    if deadline_reached(header.timer_server_now_ms, header.timer_deadline_ms) {
         eprintln!(
             "DEBUG ujian_session_page: waktu habis, auto finalize - peserta_id={}, ujian_id={}, nis={}",
             peserta_id, header.ujian_id, nis
         );
-        let _ = finalize_submission(&db, header.ujian_id, &nis, peserta_id).await;
+        if let Err(error) = finalize_submission(&db, header.ujian_id, &nis, peserta_id).await {
+            eprintln!("ERROR auto finalize expired session {peserta_id}: {error:?}");
+        }
         return Redirect::to("/siswa/ujian?message=Waktu+ujian+habis.+Jawaban+otomatis+disubmit")
             .into_response();
     }
@@ -500,7 +503,8 @@ pub async fn ujian_session_page(
         waktu_menit: header.waktu_menit,
         nomor_saat_ini,
         total_soal,
-        timer_deadline_ms: deadline.and_utc().timestamp_millis(),
+        timer_deadline_ms: header.timer_deadline_ms,
+        timer_server_now_ms: header.timer_server_now_ms,
         current,
         nav,
     };
@@ -546,14 +550,20 @@ pub async fn ujian_simpan_jawaban(
         return Redirect::to("/siswa/ujian?message=Akun+siswa+belum+memiliki+NIS").into_response();
     };
 
-    let peserta = sqlx::query_as::<_, PesertaOwnerRow>(
-        "SELECT ujian_id, status FROM ujian_pengerjaans WHERE id = ? AND nis = ? LIMIT 1",
-    )
-    .bind(peserta_id)
-    .bind(&nis)
-    .fetch_optional(&db)
-    .await
-    .unwrap_or(None);
+    let mut tx = match db.begin().await {
+        Ok(tx) => tx,
+        Err(error) => {
+            eprintln!("ERROR begin save-answer transaction: {error:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+    let peserta = match lock_owned_session(&mut tx, peserta_id, &nis).await {
+        Ok(peserta) => peserta,
+        Err(error) => {
+            eprintln!("ERROR lock save-answer session: {error:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
 
     let Some(peserta) = peserta else {
         return Redirect::to("/siswa/ujian?message=Sesi+ujian+tidak+ditemukan").into_response();
@@ -561,6 +571,16 @@ pub async fn ujian_simpan_jawaban(
 
     if peserta.status == "submitted" {
         return Redirect::to("/siswa/ujian?message=Ujian+sudah+disubmit+dan+tidak+dapat+diubah")
+            .into_response();
+    }
+
+    if peserta.is_expired() {
+        drop(tx);
+        if let Err(error) = finalize_submission(&db, peserta.ujian_id, &nis, peserta_id).await {
+            eprintln!("ERROR finalize expired save-answer request: {error:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+        return Redirect::to("/siswa/ujian?message=Waktu+ujian+habis.+Jawaban+otomatis+disubmit")
             .into_response();
     }
 
@@ -631,7 +651,7 @@ pub async fn ujian_simpan_jawaban(
     );
 
     simpan_jawaban_opsional(
-        &db,
+        &mut tx,
         peserta.ujian_id,
         &nis,
         soal_id,
@@ -646,11 +666,16 @@ pub async fn ujian_simpan_jawaban(
 
     let nomor_tujuan = nomor_tujuan.unwrap_or(nomor_saat_ini).max(1);
     let _ =
-        sqlx::query("UPDATE ujian_pengerjaans SET last_nomor = ?, updated_at = NOW() WHERE id = ?")
+        sqlx::query("UPDATE ujian_pengerjaans SET last_nomor = ?, updated_at = NOW() WHERE id = ? AND status = 'started'")
             .bind(nomor_tujuan)
             .bind(peserta_id)
-            .execute(&db)
+            .execute(&mut *tx)
             .await;
+
+    if let Err(error) = tx.commit().await {
+        eprintln!("ERROR commit save-answer transaction: {error:?}");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
 
     let mut headers = HeaderMap::new();
     headers.insert(
@@ -666,6 +691,43 @@ pub async fn ujian_simpan_jawaban(
 struct PesertaOwnerRow {
     ujian_id: i64,
     status: String,
+    timer_deadline_ms: i64,
+    timer_server_now_ms: i64,
+}
+
+impl PesertaOwnerRow {
+    fn is_expired(&self) -> bool {
+        deadline_reached(self.timer_server_now_ms, self.timer_deadline_ms)
+    }
+}
+
+fn deadline_reached(server_now_ms: i64, deadline_ms: i64) -> bool {
+    server_now_ms >= deadline_ms
+}
+
+async fn lock_owned_session(
+    tx: &mut Transaction<'_, MySql>,
+    peserta_id: i64,
+    nis: &str,
+) -> Result<Option<PesertaOwnerRow>, sqlx::Error> {
+    sqlx::query_as::<_, PesertaOwnerRow>(
+        r#"
+        SELECT
+            p.ujian_id,
+            p.status,
+            CAST(UNIX_TIMESTAMP(TIMESTAMPADD(MINUTE, u.waktu_menit, p.started_at)) * 1000 AS SIGNED) AS timer_deadline_ms,
+            CAST(UNIX_TIMESTAMP(NOW(3)) * 1000 AS SIGNED) AS timer_server_now_ms
+        FROM ujian_pengerjaans p
+        JOIN ujians u ON u.id = p.ujian_id
+        WHERE p.id = ? AND p.nis = ?
+        LIMIT 1
+        FOR UPDATE
+        "#,
+    )
+    .bind(peserta_id)
+    .bind(nis)
+    .fetch_optional(&mut **tx)
+    .await
 }
 
 #[derive(Deserialize)]
@@ -698,14 +760,20 @@ pub async fn ujian_submit(
         return Redirect::to("/siswa/ujian?message=Akun+siswa+belum+memiliki+NIS").into_response();
     };
 
-    let peserta = sqlx::query_as::<_, PesertaOwnerRow>(
-        "SELECT ujian_id, status FROM ujian_pengerjaans WHERE id = ? AND nis = ? LIMIT 1",
-    )
-    .bind(peserta_id)
-    .bind(&nis)
-    .fetch_optional(&db)
-    .await
-    .unwrap_or(None);
+    let mut tx = match db.begin().await {
+        Ok(tx) => tx,
+        Err(error) => {
+            eprintln!("ERROR begin submit transaction: {error:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+    let peserta = match lock_owned_session(&mut tx, peserta_id, &nis).await {
+        Ok(peserta) => peserta,
+        Err(error) => {
+            eprintln!("ERROR lock submit session: {error:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
 
     let Some(peserta) = peserta else {
         return Redirect::to("/siswa/ujian?message=Sesi+ujian+tidak+ditemukan").into_response();
@@ -721,13 +789,15 @@ pub async fn ujian_submit(
             .into_response();
     }
 
-    if let Some(soal_id) = form.soal_id {
+    if !peserta.is_expired()
+        && let Some(soal_id) = form.soal_id
+    {
         eprintln!(
             "DEBUG ujian_submit: akan menyimpan jawaban soal_id={}",
             soal_id
         );
         simpan_jawaban_opsional(
-            &db,
+            &mut tx,
             peserta.ujian_id,
             &nis,
             soal_id,
@@ -737,11 +807,36 @@ pub async fn ujian_submit(
         .await;
     }
 
+    if let Err(error) = sqlx::query(
+        r#"
+        UPDATE ujian_pengerjaans
+        SET status = 'submitted', submitted_at = COALESCE(submitted_at, NOW()), updated_at = NOW()
+        WHERE id = ? AND status = 'started'
+        "#,
+    )
+    .bind(peserta_id)
+    .execute(&mut *tx)
+    .await
+    {
+        eprintln!("ERROR mark session submitted: {error:?}");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+    if let Err(error) = tx.commit().await {
+        eprintln!("ERROR commit submit transaction: {error:?}");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+
     eprintln!(
         "DEBUG ujian_submit: akan memanggil finalize_submission untuk ujian_id={}, nis={}",
         peserta.ujian_id, nis
     );
-    let total_nilai = finalize_submission(&db, peserta.ujian_id, &nis, peserta_id).await;
+    let total_nilai = match finalize_submission(&db, peserta.ujian_id, &nis, peserta_id).await {
+        Ok(total_nilai) => total_nilai,
+        Err(error) => {
+            eprintln!("ERROR finalize submitted session: {error:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
     eprintln!(
         "DEBUG ujian_submit: finalize_submission selesai, total_nilai={}",
         total_nilai
@@ -753,280 +848,154 @@ pub async fn ujian_submit(
     .into_response()
 }
 
-async fn finalize_submission(db: &MySqlPool, ujian_id: i64, nis: &str, peserta_id: i64) -> f64 {
-    eprintln!(
-        "DEBUG finalize_submission: START - ujian_id={}, nis={}, peserta_id={}",
-        ujian_id, nis, peserta_id
-    );
+async fn finalize_submission(
+    db: &MySqlPool,
+    ujian_id: i64,
+    nis: &str,
+    peserta_id: i64,
+) -> Result<f64, sqlx::Error> {
+    let mut tx = db.begin().await?;
+    let session: Option<(String, Option<f64>)> = sqlx::query_as(
+        "SELECT status, CAST(total_nilai AS DOUBLE) FROM ujian_pengerjaans WHERE id = ? AND ujian_id = ? AND nis = ? FOR UPDATE",
+    )
+    .bind(peserta_id)
+    .bind(ujian_id)
+    .bind(nis)
+    .fetch_optional(&mut *tx)
+    .await?;
+    let Some((status, stored_total)) = session else {
+        return Err(sqlx::Error::RowNotFound);
+    };
+    if status == "submitted"
+        && let Some(total) = stored_total
+    {
+        tx.commit().await?;
+        return Ok(total);
+    }
 
-    // Fetch ujian metadata (mata_pelajaran and tahun)
-    let ujian_meta: Option<(i64, Option<String>)> = sqlx::query_as(
+    let (mata_pelajaran_id, tahun): (i64, String) = sqlx::query_as(
+        "SELECT CAST(mata_pelajaran_id AS SIGNED), CAST(tahun AS CHAR) FROM ujians WHERE id = ? LIMIT 1",
+    )
+    .bind(ujian_id)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    let total_benar: f64 = sqlx::query_scalar(
         r#"
-        SELECT CAST(mata_pelajaran_id AS SIGNED) as mata_pelajaran_id, tahun
-        FROM ujians
-        WHERE id = ?
-        LIMIT 1
+        SELECT COALESCE(SUM(CAST(COALESCE(bobot_nilai, 0) AS DOUBLE)), 0)
+        FROM ujian_jawabans
+        WHERE ujian_id = ? AND nis = ?
         "#,
     )
     .bind(ujian_id)
-    .fetch_optional(db)
-    .await
-    .unwrap_or_else(|e| {
-        eprintln!(
-            "DEBUG finalize_submission: hasil_nilais meta query failed: ujian_id={}, peserta_id={}, nis={}, err={:?}",
-            ujian_id, peserta_id, nis, e
-        );
-        None
-    });
+    .bind(nis)
+    .fetch_one(&mut *tx)
+    .await?;
+    let total_possible_non_uraian: f64 = sqlx::query_scalar(
+        r#"
+        SELECT COALESCE(SUM(CAST(COALESCE(s.bobot_nilai, 0) AS DOUBLE)), 0)
+        FROM ujian_soals us
+        JOIN soals s ON s.id = us.soal_id
+        WHERE us.ujian_id = ? AND s.kategori <> 'Uraian'
+        "#,
+    )
+    .bind(ujian_id)
+    .fetch_one(&mut *tx)
+    .await?;
+    let total_salah = (total_possible_non_uraian - total_benar).max(0.0);
+    let total_uraian: f64 = sqlx::query_scalar(
+        r#"
+        SELECT COALESCE(SUM(CAST(COALESCE(j.nilai_uraian, 0) AS DOUBLE)), 0)
+        FROM ujian_jawabans j
+        JOIN soals s ON s.id = j.soal_id
+        WHERE j.ujian_id = ? AND j.nis = ? AND s.kategori = 'Uraian'
+        "#,
+    )
+    .bind(ujian_id)
+    .bind(nis)
+    .fetch_one(&mut *tx)
+    .await?;
+    let total_score = total_benar + total_uraian;
 
-    eprintln!("DEBUG finalize_submission: ujian_meta={:?}", ujian_meta);
-    if let Some((_, None)) = ujian_meta {
-        eprintln!(
-            "WARN finalize_submission: ujian_meta.tahun is NULL - ujian_id={}, nis={}, peserta_id={}",
-            ujian_id, nis, peserta_id
-        );
-    }
+    sqlx::query(
+        r#"
+        INSERT INTO hasil_nilais
+            (nis, ujian_id, mata_pelajaran_id, tahun, total_benar, total_salah, total_pg, total_uraian, total_nilai, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+        ON DUPLICATE KEY UPDATE
+            total_benar = VALUES(total_benar),
+            total_salah = VALUES(total_salah),
+            total_uraian = VALUES(total_uraian),
+            total_pg = VALUES(total_benar),
+            total_nilai = VALUES(total_nilai),
+            updated_at = NOW()
+        "#,
+    )
+    .bind(nis)
+    .bind(ujian_id)
+    .bind(mata_pelajaran_id)
+    .bind(&tahun)
+    .bind(total_benar)
+    .bind(total_salah)
+    .bind(total_benar)
+    .bind(total_uraian)
+    .bind(total_score)
+    .execute(&mut *tx)
+    .await?;
 
-    // If we have ujian metadata, compute totals directly from existing answers in ujian_jawabans
-    if let Some((mata_pelajaran_id, Some(tahun))) = ujian_meta {
-        eprintln!(
-            "DEBUG finalize_submission: mata_pelajaran_id={}, tahun={}",
-            mata_pelajaran_id, tahun
-        );
-
-        // Check if there are any answers in ujian_jawabans for this nis and ujian_id
-        let answer_count: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM ujian_jawabans WHERE ujian_id = ? AND nis = ?",
-        )
-        .bind(ujian_id)
-        .bind(nis)
-        .fetch_one(db)
-        .await
-        .unwrap_or(0);
-        eprintln!(
-            "DEBUG finalize_submission: answer_count for this ujian_id and nis = {}",
-            answer_count
-        );
-
-        // total_benar: sum ALL bobot_nilai from ujian_jawabans
-        // This includes partial credit for Pilihan Ganda Kompleks (already calculated in simpan_jawaban_opsional)
-        // Note: We sum ALL bobot_nilai (not just is_benar=1) because bobot_nilai already contains the earned score
-        eprintln!(
-            "DEBUG finalize_submission: about to query total_benar with ujian_id={}, nis={}",
-            ujian_id, nis
-        );
-
-        // Fix: Cast DECIMAL to DOUBLE to avoid type mismatch in sqlx
-        // Sum ALL bobot_nilai (not filtering by is_benar)
-        let total_benar_result: Result<f64, _> = sqlx::query_scalar(
-            r#"
-            SELECT COALESCE(SUM(CAST(COALESCE(j.bobot_nilai, 0) AS DOUBLE)), 0)
-            FROM ujian_jawabans j
-            WHERE j.ujian_id = ?
-              AND j.nis = ?
-            "#,
-        )
-        .bind(ujian_id)
-        .bind(nis)
-        .fetch_one(db)
-        .await;
-
-        let total_benar = match total_benar_result {
-            Ok(val) => {
-                eprintln!(
-                    "DEBUG finalize_submission: total_benar query SUCCESS, value={}",
-                    val
-                );
-                val
-            }
-            Err(e) => {
-                eprintln!(
-                    "DEBUG finalize_submission: total_benar query FAILED: {:?}",
-                    e
-                );
-                0.0
-            }
-        };
-
-        eprintln!(
-            "DEBUG finalize_submission: total_benar (sum of all bobot_nilai from ujian_jawabans) = {}",
-            total_benar
-        );
-
-        // total_possible_non_uraian: sum bobot_nilai of all non-essay questions in this ujian.
-        // This keeps total_salah aligned with objective questions only.
-        eprintln!(
-            "DEBUG finalize_submission: about to query total_possible_non_uraian with ujian_id={}",
-            ujian_id
-        );
-
-        let total_possible_non_uraian_result: Result<f64, _> = sqlx::query_scalar(
-            r#"
-            SELECT COALESCE(SUM(CAST(COALESCE(s.bobot_nilai, 0) AS DOUBLE)), 0)
-            FROM ujian_soals us
-            JOIN soals s ON s.id = us.soal_id
-            WHERE us.ujian_id = ?
-              AND s.kategori <> 'Uraian'
-            "#,
-        )
-        .bind(ujian_id)
-        .fetch_one(db)
-        .await;
-
-        let total_possible_non_uraian = match total_possible_non_uraian_result {
-            Ok(val) => {
-                eprintln!(
-                    "DEBUG finalize_submission: total_possible_non_uraian query SUCCESS, value={}",
-                    val
-                );
-                val
-            }
-            Err(e) => {
-                eprintln!(
-                    "DEBUG finalize_submission: total_possible_non_uraian query FAILED: {:?}",
-                    e
-                );
-                0.0
-            }
-        };
-
-        eprintln!(
-            "DEBUG finalize_submission: total_possible_non_uraian = {}",
-            total_possible_non_uraian
-        );
-
-        // total_salah = total_possible_non_uraian - total_benar (clamp >= 0)
-        let mut total_salah = total_possible_non_uraian - total_benar;
-        if total_salah < 0.0 {
-            total_salah = 0.0;
-        }
-
-        eprintln!("DEBUG finalize_submission: total_salah = {}", total_salah);
-
-        // total_uraian: sum nilai_uraian for uraian answers (typically reviewed manually later)
-        // Fix: Cast DECIMAL to DOUBLE to avoid type mismatch in sqlx
-        let total_uraian: Result<f64, _> = sqlx::query_scalar(
-            r#"
-            SELECT COALESCE(SUM(CAST(COALESCE(j.nilai_uraian, 0) AS DOUBLE)), 0)
-            FROM ujian_jawabans j
-            JOIN soals s ON s.id = j.soal_id
-            WHERE j.ujian_id = ?
-              AND j.nis = ?
-              AND s.kategori = 'Uraian'
-            "#,
-        )
-        .bind(ujian_id)
-        .bind(nis)
-        .fetch_one(db)
-        .await;
-
-        let total_uraian = match total_uraian {
-            Ok(val) => val,
-            Err(e) => {
-                eprintln!(
-                    "DEBUG finalize_submission: total_uraian query FAILED: {:?}",
-                    e
-                );
-                0.0
-            }
-        };
-
-        eprintln!("DEBUG finalize_submission: total_uraian = {}", total_uraian);
-
-        // Total score = total_benar (PG yang benar) + total_uraian (essay yang sudah dinilai)
-        let total_score = total_benar + total_uraian;
-        eprintln!(
-            "DEBUG finalize_submission: total_score = total_benar + total_uraian = {}",
-            total_score
-        );
-
-        // Update peserta status and total_nilai
-        let update_res = sqlx::query(
-            r#"
-            UPDATE ujian_pengerjaans
-            SET status = 'submitted',
-                submitted_at = NOW(),
-                total_nilai = ?,
-                updated_at = NOW()
-            WHERE id = ?
-            "#,
-        )
-        .bind(total_score)
-        .bind(peserta_id)
-        .execute(db)
-        .await;
-        if let Err(e) = update_res {
-            eprintln!(
-                "ERROR finalize_submission: update ujian_pengerjaans failed peserta_id={}, err={:?}",
-                peserta_id, e
-            );
-        }
-
-        eprintln!("DEBUG finalize_submission: akan insert/update hasil_nilais");
-
-        // Insert/update hasil_nilais with totals
-        let insert_res = sqlx::query(
-            r#"
-            INSERT INTO hasil_nilais
-                (nis, ujian_id, mata_pelajaran_id, tahun, total_benar, total_salah, total_pg, total_uraian, total_nilai, created_at, updated_at)
-            VALUES
-                (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
-            ON DUPLICATE KEY UPDATE
-                total_benar = VALUES(total_benar),
-                total_salah = VALUES(total_salah),
-                total_uraian = VALUES(total_uraian),
-                total_pg = VALUES(total_benar),
-                total_nilai = VALUES(total_nilai),
-                updated_at = NOW()
-            "#,
-        )
-        .bind(nis)
-        .bind(ujian_id)
-        .bind(mata_pelajaran_id)
-        .bind(&tahun)
-        .bind(total_benar)
-        .bind(total_salah)
-        .bind(total_benar)
-        .bind(total_uraian)
-        .bind(total_score)
-        .execute(db)
-        .await;
-        if let Err(e) = insert_res {
-            eprintln!(
-                "DEBUG finalize_submission: hasil_nilais insert failed: ujian_id={}, nis={}, mata_pelajaran_id={}, tahun={}, err={:?}",
-                ujian_id, nis, mata_pelajaran_id, tahun, e
-            );
-        } else {
-            eprintln!("DEBUG finalize_submission: hasil_nilais insert/update SUCCESS");
-        }
-
-        return total_score;
-    }
-
-    eprintln!("DEBUG finalize_submission: FALLBACK path - no ujian_meta");
-
-    // Fallback: if no ujian meta, mark submitted and return 0
-    let update_res = sqlx::query(
+    sqlx::query(
         r#"
         UPDATE ujian_pengerjaans
         SET status = 'submitted',
-            submitted_at = NOW(),
-            total_nilai = 0,
+            submitted_at = COALESCE(submitted_at, NOW()),
+            total_nilai = ?,
             updated_at = NOW()
         WHERE id = ?
         "#,
     )
+    .bind(total_score)
     .bind(peserta_id)
-    .execute(db)
-    .await;
-    if let Err(e) = update_res {
-        eprintln!(
-            "ERROR finalize_submission: fallback update ujian_pengerjaans failed peserta_id={}, err={:?}",
-            peserta_id, e
-        );
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+
+    Ok(total_score)
+}
+
+#[derive(FromRow)]
+struct ExpiredSessionRow {
+    id: i64,
+    ujian_id: i64,
+    nis: String,
+}
+
+pub async fn finalize_expired_sessions(db: &MySqlPool) -> Result<u64, sqlx::Error> {
+    let sessions = sqlx::query_as::<_, ExpiredSessionRow>(
+        r#"
+        SELECT p.id, p.ujian_id, p.nis
+        FROM ujian_pengerjaans p
+        JOIN ujians u ON u.id = p.ujian_id
+        WHERE (p.status = 'started' AND NOW() >= TIMESTAMPADD(MINUTE, u.waktu_menit, p.started_at))
+           OR (p.status = 'submitted' AND p.total_nilai IS NULL)
+        ORDER BY p.id
+        LIMIT 100
+        "#,
+    )
+    .fetch_all(db)
+    .await?;
+
+    let mut finalized = 0;
+    for session in sessions {
+        match finalize_submission(db, session.ujian_id, &session.nis, session.id).await {
+            Ok(_) => finalized += 1,
+            Err(error) => eprintln!(
+                "ERROR periodic finalize session id={} ujian_id={}: {error:?}",
+                session.id, session.ujian_id
+            ),
+        }
     }
 
-    0.0
+    Ok(finalized)
 }
 
 fn parse_option_list(raw: &str) -> Vec<String> {
@@ -1045,7 +1014,7 @@ fn proportional_score(correct_count: usize, total_correct: usize, bobot_nilai: f
 }
 
 async fn simpan_jawaban_opsional(
-    db: &MySqlPool,
+    tx: &mut Transaction<'_, MySql>,
     ujian_id: i64,
     nis: &str,
     soal_id: i64,
@@ -1068,7 +1037,7 @@ async fn simpan_jawaban_opsional(
     )
     .bind(ujian_id)
     .bind(soal_id)
-    .fetch_optional(db)
+    .fetch_optional(&mut **tx)
     .await;
 
     let kunci = match kunci_res {
@@ -1093,7 +1062,7 @@ async fn simpan_jawaban_opsional(
         )
         .bind(ujian_id)
         .bind(soal_id)
-        .fetch_one(db)
+        .fetch_one(&mut **tx)
         .await
         {
             Ok(c) => eprintln!("DEBUG simpan_jawaban_opsional: ujian_soals.count = {}", c),
@@ -1105,7 +1074,7 @@ async fn simpan_jawaban_opsional(
 
         match sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM soals WHERE id = ?")
             .bind(soal_id)
-            .fetch_one(db)
+            .fetch_one(&mut **tx)
             .await
         {
             Ok(c) => eprintln!("DEBUG simpan_jawaban_opsional: soals.count = {}", c),
@@ -1119,7 +1088,7 @@ async fn simpan_jawaban_opsional(
             "SELECT kunci_jawaban FROM soals WHERE id = ?",
         )
         .bind(soal_id)
-        .fetch_one(db)
+        .fetch_one(&mut **tx)
         .await
         {
             Ok(kv) => eprintln!(
@@ -1164,7 +1133,7 @@ async fn simpan_jawaban_opsional(
         .bind(nis)
         .bind(soal_id)
         .bind(text)
-        .execute(db)
+        .execute(&mut **tx)
         .await;
         if let Err(e) = res {
             eprintln!(
@@ -1214,7 +1183,7 @@ async fn simpan_jawaban_opsional(
         .bind(pilihan)
         .bind(if is_benar { 1 } else { 0 })
         .bind(nilai)
-        .execute(db)
+        .execute(&mut **tx)
         .await;
         if let Err(e) = res {
             eprintln!(
@@ -1287,7 +1256,7 @@ async fn simpan_jawaban_opsional(
         .bind(pilihan_store)
         .bind(if is_benar { 1 } else { 0 })
         .bind(nilai)
-        .execute(db)
+        .execute(&mut **tx)
         .await;
         if let Err(e) = res {
             eprintln!(
@@ -1356,7 +1325,7 @@ async fn simpan_jawaban_opsional(
         .bind(pilihan_store)
         .bind(if is_benar { 1 } else { 0 })
         .bind(nilai)
-        .execute(db)
+        .execute(&mut **tx)
         .await;
         if let Err(e) = res {
             eprintln!(
@@ -1417,7 +1386,7 @@ async fn simpan_jawaban_opsional(
         .bind(pilihan_store)
         .bind(if is_benar { 1 } else { 0 })
         .bind(nilai)
-        .execute(db)
+        .execute(&mut **tx)
         .await;
         if let Err(e) = res {
             eprintln!(
@@ -1425,7 +1394,6 @@ async fn simpan_jawaban_opsional(
                 ujian_id, nis, soal_id, e
             );
         }
-        return;
     }
 }
 
@@ -1528,5 +1496,23 @@ async fn build_gate_data(
         active_ujian,
         message,
         error,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{deadline_reached, proportional_score};
+
+    #[test]
+    fn deadline_is_enforced_before_at_and_after_boundary() {
+        assert!(!deadline_reached(999, 1_000));
+        assert!(deadline_reached(1_000, 1_000));
+        assert!(deadline_reached(1_001, 1_000));
+    }
+
+    #[test]
+    fn objective_scoring_formula_is_unchanged() {
+        assert_eq!(proportional_score(2, 4, 10.0), 5.0);
+        assert_eq!(proportional_score(0, 4, 10.0), 0.0);
     }
 }
