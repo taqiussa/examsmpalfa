@@ -18,6 +18,7 @@ jobs:
   build:
     name: Build and Push Docker
     runs-on: ubuntu-latest
+    timeout-minutes: 90
 
     outputs:
       image: ${{ steps.meta.outputs.image }}
@@ -55,11 +56,6 @@ jobs:
           cache-from: type=gha,scope=exam
           cache-to: type=gha,mode=max,scope=exam
 
-- name: Check SSH key fingerprint
-  run: |
-    ssh-keygen -y -f ~/.ssh/github_actions_siakad \
-      | ssh-keygen -lf -
-
   deploy:
     name: Deploy Exam to Docker Swarm
     needs: build
@@ -76,6 +72,7 @@ jobs:
           tags: tag:github-actions
 
       - name: Configure SSH
+        shell: bash
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
@@ -96,13 +93,19 @@ jobs:
 
           chmod 600 ~/.ssh/github_actions_siakad
           chmod 600 ~/.ssh/known_hosts
-          
+
       - name: Check SSH key fingerprint
+        shell: bash
         run: |
-          ssh-keygen -y -f ~/.ssh/github_actions_siakad \
+          set -euo pipefail
+
+          echo "GitHub Actions SSH public key fingerprint:"
+          ssh-keygen -y \
+            -f ~/.ssh/github_actions_siakad \
             | ssh-keygen -lf -
 
       - name: Deploy Exam to Swarm
+        shell: bash
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
@@ -113,6 +116,8 @@ jobs:
 
           test -n "$SSH_HOST"
           test -n "$SSH_USER"
+
+          echo "Connecting to Docker Swarm manager"
 
           ssh \
             -i ~/.ssh/github_actions_siakad \
@@ -133,10 +138,10 @@ jobs:
           echo "Checking Docker Swarm service"
           docker service inspect "$SERVICE" >/dev/null
 
-          echo "Pulling image: $IMAGE"
+          echo "Pulling Docker image: $IMAGE"
           docker pull "$IMAGE"
 
-          echo "Updating service: $SERVICE"
+          echo "Updating Docker Swarm service: $SERVICE"
           docker service update \
             --with-registry-auth \
             --detach=false \
@@ -145,7 +150,8 @@ jobs:
             --update-failure-action rollback \
             "$SERVICE"
 
-          echo "Deployment completed"
+          echo "Deployment completed successfully"
+
           docker service ps "$SERVICE" --no-trunc
 
           REMOTE
