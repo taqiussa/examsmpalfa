@@ -1,10 +1,10 @@
 services:
-  app:
-    image: taqiussa/examelemenka:latest
+  exam:
+    image: taqiussa/smpalfa:exam
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: examelemenka
+    container_name: exam
     restart: unless-stopped
     env_file:
       - .env

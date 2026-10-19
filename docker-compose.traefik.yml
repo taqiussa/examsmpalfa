@@ -1,6 +1,6 @@
 services:
-  examelemenka:
-    image: taqiussa/examelemenka:latest
+  exam:
+    image: taqiussa/smpalfa:exam
 
     env_file:
       - .env
