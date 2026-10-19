@@ -28,8 +28,9 @@ use crate::{
             mata_pelajaran_update,
         },
         ujian::{
-            nilai_kelas_mapel_export, nilai_kelas_mapel_page, nilai_kelas_mapel_table, soal_create,
-            soal_delete, soal_image_upload, soal_store, status_peserta_page, status_peserta_table,
+            nilai_kelas_mapel_export, nilai_kelas_mapel_export_jawaban, nilai_kelas_mapel_page,
+            nilai_kelas_mapel_table, nilai_ujian_options, soal_create, soal_delete,
+            soal_image_upload, soal_store, status_peserta_page, status_peserta_table,
             status_peserta_toggle, ujian_create, ujian_delete, ujian_delete_token,
             ujian_generate_token, ujian_index, ujian_progress, ujian_progress_active_panel,
             ujian_show, ujian_store, ujian_table, ujian_toggle_active, ujian_toggle_token,
@@ -113,7 +114,12 @@ pub fn guru_routes() -> Router {
         .route("/review-uraian/score", post(ujian_uraian_score))
         .route("/hasil-nilai", get(nilai_kelas_mapel_page))
         .route("/hasil-nilai/table", get(nilai_kelas_mapel_table))
+        .route("/hasil-nilai/ujian-options", get(nilai_ujian_options))
         .route("/hasil-nilai/export", get(nilai_kelas_mapel_export))
+        .route(
+            "/hasil-nilai/export-jawaban",
+            get(nilai_kelas_mapel_export_jawaban),
+        )
         .route("/ujian/store", post(ujian_store))
         .route("/ujian/{id}", get(ujian_show))
         .route("/ujian/{id}", delete(ujian_delete))

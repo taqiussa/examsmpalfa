@@ -2,15 +2,29 @@
 <div class="text-sm text-slate-500">Silakan pilih kelas terlebih dahulu.</div>
 {% else %}
 <div class="bg-white border border-slate-200 rounded-lg p-4">
-        <div class="flex items-center justify-between gap-3 mb-4">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
                 <div class="text-sm text-slate-500">
-                        Export akan mengikuti filter kelas, mata pelajaran, dan tahun yang sedang aktif.
+                        Export mengikuti filter kelas, mata pelajaran, tahun, dan ujian yang sedang aktif.
                 </div>
-                <a href="/hasil-nilai/export?kelas_id={{ kelas_id }}&mata_pelajaran_id={{ mata_pelajaran_id }}&tahun={{ tahun | urlencode }}"
-                        data-loading="off"
-                        class="inline-flex items-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700">
-                        Export Excel
-                </a>
+                <div class="flex flex-wrap items-center gap-2">
+                        <a href="/hasil-nilai/export?kelas_id={{ kelas_id }}&mata_pelajaran_id={{ mata_pelajaran_id }}&ujian_id={{ ujian_id }}&tahun={{ tahun | urlencode }}"
+                                data-loading="off"
+                                class="inline-flex items-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700">
+                                Export Nilai
+                        </a>
+                        {% if ujian_id > 0 %}
+                        <a href="/hasil-nilai/export-jawaban?kelas_id={{ kelas_id }}&mata_pelajaran_id={{ mata_pelajaran_id }}&ujian_id={{ ujian_id }}&tahun={{ tahun | urlencode }}"
+                                data-loading="off"
+                                class="inline-flex items-center rounded-md bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-700">
+                                Export Nilai + Jawaban
+                        </a>
+                        {% else %}
+                        <span class="inline-flex cursor-not-allowed items-center rounded-md bg-slate-200 px-3 py-2 text-sm font-medium text-slate-500"
+                                title="Pilih satu ujian untuk mengekspor jawaban">
+                                Export Nilai + Jawaban
+                        </span>
+                        {% endif %}
+                </div>
         </div>
         <div class="overflow-auto">
                 <table class="w-full text-sm border border-slate-200 rounded">

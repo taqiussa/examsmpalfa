@@ -85,6 +85,8 @@ pub struct NilaiFilter {
     pub kelas_id: Option<i64>,
     #[serde(default, deserialize_with = "empty_string_as_none_i64")]
     pub mata_pelajaran_id: Option<i64>,
+    #[serde(default, deserialize_with = "empty_string_as_none_i64")]
+    pub ujian_id: Option<i64>,
     pub tahun: Option<String>,
 }
 
@@ -629,7 +631,10 @@ mod progress;
 mod status_peserta;
 mod uraian;
 
-pub use nilai::{nilai_kelas_mapel_export, nilai_kelas_mapel_page, nilai_kelas_mapel_table};
+pub use nilai::{
+    nilai_kelas_mapel_export, nilai_kelas_mapel_export_jawaban, nilai_kelas_mapel_page,
+    nilai_kelas_mapel_table, nilai_ujian_options,
+};
 pub use progress::{ujian_progress, ujian_progress_active_panel};
 pub use status_peserta::{status_peserta_page, status_peserta_table, status_peserta_toggle};
 pub use uraian::{ujian_uraian_review, ujian_uraian_score, ujian_uraian_table};

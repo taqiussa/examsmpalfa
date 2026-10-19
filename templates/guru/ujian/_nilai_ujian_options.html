@@ -1,0 +1,12 @@
+<div class="flex flex-col space-y-1 text-md text-slate-600">
+        <label class="text-sm text-slate-600">Ujian</label>
+        <select name="ujian_id" class="input">
+                <option value="">Rekap seluruh ujian</option>
+                {% for ujian in data.list_ujian %}
+                <option value="{{ ujian.id }}" {% if data.ujian_id==ujian.id %}selected{% endif %}>
+                        {{ ujian.title }}
+                </option>
+                {% endfor %}
+        </select>
+        <span class="text-xs text-slate-500">Wajib dipilih untuk export jawaban.</span>
+</div>
