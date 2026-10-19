@@ -70,7 +70,7 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
+          port: 1817
           envs: IMAGE
           command_timeout: 10m
           script: |
