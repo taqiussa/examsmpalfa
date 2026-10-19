@@ -55,6 +55,10 @@ jobs:
           cache-from: type=gha,scope=exam
           cache-to: type=gha,mode=max,scope=exam
 
+- name: Check SSH key fingerprint
+  run: |
+    ssh-keygen -y -f ~/.ssh/github_actions_siakad \
+      | ssh-keygen -lf -
 
   deploy:
     name: Deploy Exam to Docker Swarm
@@ -85,13 +89,18 @@ jobs:
           test -n "$SSH_KNOWN_HOSTS"
 
           printf '%s\n' "$SSH_PRIVATE_KEY" \
-            > ~/.ssh/github_actions
+            > ~/.ssh/github_actions_siakad
 
           printf '%s\n' "$SSH_KNOWN_HOSTS" \
             > ~/.ssh/known_hosts
 
-          chmod 600 ~/.ssh/github_actions
+          chmod 600 ~/.ssh/github_actions_siakad
           chmod 600 ~/.ssh/known_hosts
+          
+      - name: Check SSH key fingerprint
+        run: |
+          ssh-keygen -y -f ~/.ssh/github_actions_siakad \
+            | ssh-keygen -lf -
 
       - name: Deploy Exam to Swarm
         env:
@@ -106,7 +115,7 @@ jobs:
           test -n "$SSH_USER"
 
           ssh \
-            -i ~/.ssh/github_actions \
+            -i ~/.ssh/github_actions_siakad \
             -o IdentitiesOnly=yes \
             -o BatchMode=yes \
             -o StrictHostKeyChecking=yes \
