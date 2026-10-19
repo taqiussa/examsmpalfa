@@ -1,6 +1,6 @@
 # Model Context Protocol
 
-Dokumen ini merangkum pemahaman tentang repo `/home/taqius/rust/examelemenka` agar bisa dipakai sebagai konteks awal saat memulai chat dengan AI.
+Dokumen ini merangkum pemahaman tentang repo `/home/taqius/rust/exam` agar bisa dipakai sebagai konteks awal saat memulai chat dengan AI.
 
 ## Ringkasan Arsitektur
 - Backend: Rust (Axum), Tera templating, SQLX (MySQL).

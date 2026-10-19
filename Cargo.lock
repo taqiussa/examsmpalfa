@@ -1137,7 +1137,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "examelemenka"
+name = "exam"
 version = "1.0.0"
 dependencies = [
  "aws-config",

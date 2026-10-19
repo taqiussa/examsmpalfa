@@ -1,7 +1,7 @@
 services:
   app:
-    image: taqiussa/examelemenka:latest
-    container_name: examelemenka
+    image: taqiussa/exam:latest
+    container_name: exam
     restart: unless-stopped
     env_file:
       - .env
