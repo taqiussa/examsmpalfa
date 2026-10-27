@@ -20,9 +20,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
-    outputs:
-      image: ${{ steps.meta.outputs.image }}
-
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -36,13 +33,6 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Set image tags
-        id: meta
-        shell: bash
-        run: |
-          IMAGE="taqiussa/smpalfa:exam-${GITHUB_SHA}"
-          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
-
       - name: Build and Push
         uses: docker/build-push-action@v6
         with:
@@ -50,9 +40,7 @@ jobs:
           file: ./Dockerfile
           platforms: linux/amd64
           push: true
-          tags: |
-            taqiussa/smpalfa:exam
-            ${{ steps.meta.outputs.image }}
+          tags: taqiussa/smpalfa:exam
           cache-from: type=gha,scope=exam
           cache-to: type=gha,mode=max,scope=exam
 
@@ -99,7 +87,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          echo "GitHub Actions SSH public key fingerprint:"
           ssh-keygen -y \
             -f ~/.ssh/github_actions_siakad \
             | ssh-keygen -lf -
@@ -110,14 +97,11 @@ jobs:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_PORT: ${{ vars.EXAM_SSH_PORT || '1817' }}
-          RELEASE_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
 
           test -n "$SSH_HOST"
           test -n "$SSH_USER"
-
-          echo "Connecting to Docker Swarm manager"
 
           ssh \
             -i ~/.ssh/github_actions_siakad \
@@ -127,12 +111,11 @@ jobs:
             -o ConnectTimeout=15 \
             -p "$SSH_PORT" \
             "$SSH_USER@$SSH_HOST" \
-            bash -s -- "$RELEASE_SHA" <<'REMOTE'
+            bash -s <<'REMOTE'
 
           set -euo pipefail
 
-          SHA="$1"
-          IMAGE="taqiussa/smpalfa:exam-$SHA"
+          IMAGE="taqiussa/smpalfa:exam"
           SERVICE="smpalfa_exam"
 
           echo "Checking Docker Swarm service"
@@ -144,14 +127,20 @@ jobs:
           echo "Updating Docker Swarm service: $SERVICE"
           docker service update \
             --with-registry-auth \
+            --no-resolve-image \
+            --force \
             --detach=false \
             --image "$IMAGE" \
-            --update-order stop-first \
+            --update-order start-first \
             --update-failure-action rollback \
             "$SERVICE"
 
           echo "Deployment completed successfully"
 
           docker service ps "$SERVICE" --no-trunc
+
+          echo "Current service image:"
+          docker service inspect "$SERVICE" \
+            --format '{{.Spec.TaskTemplate.ContainerSpec.Image}}'
 
           REMOTE

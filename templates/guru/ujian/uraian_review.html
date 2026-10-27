@@ -11,15 +11,9 @@
 
         <div id="uraian-loading" class="hidden text-sm text-slate-500">Memuat jawaban...</div>
 
-        <form id="uraian-filter" class="flex flex-wrap items-end gap-3"
-                method="get"
-                action="/review-uraian"
-                hx-get="/review-uraian/table"
-                hx-target="#uraian-table"
-                hx-swap="innerHTML"
-                hx-push-url="true"
-                hx-indicator="#uraian-loading"
-                hx-trigger="change from:select">
+        <form id="uraian-filter" class="flex flex-wrap items-end gap-3" method="get" action="/review-uraian"
+                hx-get="/review-uraian/table" hx-target="#uraian-table" hx-swap="innerHTML" hx-push-url="true"
+                hx-indicator="#uraian-loading" hx-trigger="change from:select">
                 {% include "components/tahun.html" %}
                 {% include "components/list-kelas.html" %}
                 <div class="flex-1 min-w-[240px]">
@@ -27,7 +21,7 @@
                         <select name="mata_pelajaran_id" class="input">
                                 <option value="">Pilih mata pelajaran...</option>
                                 {% for m in data.list_mapel %}
-                                <option value="{{ m.id }}" {% if m.id == data.mata_pelajaran_id %}selected{% endif %}>
+                                <option value="{{ m.id }}" {% if m.id==data.mata_pelajaran_id %}selected{% endif %}>
                                         {{ m.nama }}
                                 </option>
                                 {% endfor %}
@@ -35,10 +29,27 @@
                 </div>
         </form>
 
-        <div id="uraian-table"
+        <div id="uraian-table" hx-get="/review-uraian/table" hx-trigger="load, refresh-uraian from:body"
+                hx-include="#uraian-filter" hx-indicator="#uraian-loading" hx-swap="innerHTML show:none"></div>
+        <!-- <div id="uraian-table"
                 hx-get="/review-uraian/table"
                 hx-trigger="load, refresh-uraian from:body"
                 hx-include="#uraian-filter"
-                hx-indicator="#uraian-loading"></div>
+                hx-indicator="#uraian-loading"></div> -->
 </div>
+<script>
+        (function () {
+                document.body.addEventListener('htmx:afterSettle', function (event) {
+                        if (event.detail.elt?.id !== 'uraian-table') {
+                                return;
+                        }
+
+                        const main = document.querySelector('main');
+
+                        if (main) {
+                                main.scrollTop = 0;
+                        }
+                });
+        })();
+</script>
 {% endblock %}
