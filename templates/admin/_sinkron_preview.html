@@ -1,0 +1,58 @@
+<div class="space-y-4">
+  <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+    <div class="rounded border border-emerald-200 bg-emerald-50 p-3"><div class="text-xs text-emerald-700">INSERT</div><div class="text-xl font-semibold">{{ data.summary.insert }}</div></div>
+    <div class="rounded border border-sky-200 bg-sky-50 p-3"><div class="text-xs text-sky-700">UPDATE</div><div class="text-xl font-semibold">{{ data.summary.update }}</div></div>
+    <div class="rounded border border-slate-200 bg-slate-50 p-3"><div class="text-xs text-slate-600">UNCHANGED</div><div class="text-xl font-semibold">{{ data.summary.unchanged }}</div></div>
+    <div class="rounded border border-amber-200 bg-amber-50 p-3"><div class="text-xs text-amber-700">SKIPPED</div><div class="text-xl font-semibold">{{ data.summary.skipped }}</div></div>
+    <div class="rounded border border-rose-200 bg-rose-50 p-3"><div class="text-xs text-rose-700">CONFLICT</div><div class="text-xl font-semibold">{{ data.summary.conflict }}</div></div>
+    <div class="rounded border border-violet-200 bg-violet-50 p-3"><div class="text-xs text-violet-700">AKAN DITULIS</div><div class="text-xl font-semibold">{{ data.summary.writable }}</div></div>
+  </div>
+
+  {% if data.executed %}
+  <div class="rounded border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">Hasil eksekusi aktual ditampilkan di bawah.</div>
+  {% endif %}
+
+  <div class="overflow-auto rounded-lg border border-slate-200">
+    <table class="w-full min-w-[900px] text-sm">
+      <thead class="bg-slate-100">
+        <tr>
+          <th class="border px-2 py-2">No.</th><th class="border px-2 py-2 text-left">Siswa</th>
+          <th class="border px-2 py-2">Benar</th><th class="border px-2 py-2">Salah</th>
+          <th class="border px-2 py-2">Nilai PG</th><th class="border px-2 py-2">Nilai Uraian</th>
+          <th class="border px-2 py-2">Nilai Ujian</th><th class="border px-2 py-2">Nilai Saat Ini</th>
+          <th class="border px-2 py-2">Status</th><th class="border px-2 py-2 text-left">Keterangan</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in data.rows %}
+        <tr>
+          <td class="border px-2 py-2 text-center">{{ loop.index }}</td>
+          <td class="border px-2 py-2"><div class="font-semibold">{{ row.nama | default(value="NIS " ~ row.nis) }}</div><div class="text-xs text-slate-500">{{ row.nis }}</div></td>
+          <td class="border px-2 py-2 text-center">{{ row.total_benar | default(value="-") }}</td>
+          <td class="border px-2 py-2 text-center">{{ row.total_salah | default(value="-") }}</td>
+          <td class="border px-2 py-2 text-center">{{ row.nilai_pg | default(value="-") }}</td>
+          <td class="border px-2 py-2 text-center">{{ row.nilai_uraian | default(value="-") }}</td>
+          <td class="border px-2 py-2 text-center font-semibold">{{ row.total_nilai | default(value="-") }}</td>
+          <td class="border px-2 py-2 text-center">{{ row.nilai_target | default(value="-") }}</td>
+          <td class="border px-2 py-2 text-center"><span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold">{{ row.status }}</span></td>
+          <td class="border px-2 py-2 text-slate-600">{{ row.alasan | default(value="-") }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="10" class="border px-3 py-8 text-center text-slate-500">Tidak ada siswa pada kelas dan tahun terpilih.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if not data.executed %}
+  <form hx-post="/sinkron-penilaian/sync" hx-include="#sinkron-filter"
+    hx-target="#sinkron-preview" hx-swap="innerHTML" hx-disabled-elt="button">
+    <button type="submit" class="button"
+      data-confirm="Sinkronkan {{ data.summary.writable }} data? Kondisi database dan nilai ujian akan dihitung ulang saat eksekusi."
+      data-confirm-text="Sinkronkan" {% if data.summary.writable == 0 or data.summary.conflict > 0 %}disabled{% endif %}>
+      Sinkronkan Penilaian ({{ data.summary.writable }})
+    </button>
+  </form>
+  {% if data.summary.conflict > 0 %}<p class="text-sm text-rose-700">Selesaikan konflik sebelum sinkronisasi.</p>{% endif %}
+  {% endif %}
+</div>

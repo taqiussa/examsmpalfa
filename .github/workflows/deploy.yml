@@ -126,11 +126,12 @@ jobs:
 
           echo "Updating Docker Swarm service: $SERVICE"
           docker service update \
+            --image "$IMAGE" \
             --with-registry-auth \
             --no-resolve-image \
             --force \
+            --update-delay 10s \
             --detach=false \
-            --image "$IMAGE" \
             --update-order start-first \
             --update-failure-action rollback \
             "$SERVICE"
@@ -140,7 +141,9 @@ jobs:
           docker service ps "$SERVICE" --no-trunc
 
           echo "Current service image:"
-          docker service inspect "$SERVICE" \
-            --format '{{.Spec.TaskTemplate.ContainerSpec.Image}}'
+          CURRENT_IMAGE="$(docker service inspect "$SERVICE" \
+            --format '{{.Spec.TaskTemplate.ContainerSpec.Image}}')"
+          echo "$CURRENT_IMAGE"
+          test "$CURRENT_IMAGE" = "$IMAGE"
 
           REMOTE

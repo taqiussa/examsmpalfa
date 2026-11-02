@@ -105,6 +105,7 @@ mod tests {
                 .any(|i| i.kind == "header" && i.label == "Admin")
         );
         assert!(items.iter().any(|i| i.href == "/dashboard" && i.active));
+        assert!(items.iter().any(|i| i.href == "/sinkron-penilaian"));
     }
 
     #[test]

@@ -1,0 +1,82 @@
+{% extends "layouts/app.html" %}
+
+{% block content %}
+<div class="card space-y-6">
+  <div>
+    <h1 class="text-xl font-semibold">Sinkron Penilaian</h1>
+    <p class="mt-1 text-sm text-slate-500">
+      Preview nilai akhir ujian lalu sinkronkan ke penilaian rapor yang sesuai.
+    </p>
+  </div>
+
+  <form id="sinkron-filter" class="grid gap-4 md:grid-cols-2 xl:grid-cols-4"
+    method="get" action="/sinkron-penilaian/preview"
+    hx-get="/sinkron-penilaian/preview" hx-target="#sinkron-preview"
+    hx-swap="innerHTML" hx-indicator="#sinkron-loading">
+    {% include "components/tahun.html" %}
+    {% include "components/semester.html" %}
+    {% include "components/list-kelas.html" %}
+
+    <div class="flex flex-col space-y-1 text-md text-slate-600">
+      <label class="text-sm text-slate-600">Mata Pelajaran</label>
+      <select name="mata_pelajaran_id" class="input" required>
+        <option value="">Pilih mata pelajaran...</option>
+        {% for mapel in data.list_mapel %}
+        <option value="{{ mapel.id }}" {% if data.mata_pelajaran_id==mapel.id %}selected{% endif %}>
+          {{ mapel.nama }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div id="sinkron-ujian-options"
+      hx-get="/sinkron-penilaian/ujian-options"
+      hx-trigger="load, change from:#sinkron-filter select[name='tahun'], change from:#sinkron-filter select[name='mata_pelajaran_id']"
+      hx-include="#sinkron-filter" hx-target="this" hx-swap="innerHTML">
+      {% include "admin/_sinkron_ujian_options.html" %}
+    </div>
+
+    <div id="sinkron-reference-options" class="md:col-span-2 xl:col-span-3"
+      hx-get="/sinkron-penilaian/reference-options"
+      hx-trigger="load, change from:#sinkron-filter select[name='tahun'], change from:#sinkron-filter select[name='semester'], change from:#sinkron-filter select[name='kelas_id'], change from:#sinkron-filter select[name='kategori_nilai_id']"
+      hx-include="#sinkron-filter" hx-target="this" hx-swap="innerHTML">
+      <div class="text-sm text-slate-500">Pilih tahun, semester, dan kelas untuk memuat referensi.</div>
+    </div>
+
+    <div class="flex items-end gap-2 md:col-span-2 xl:col-span-4">
+      <button type="submit" class="button" id="preview-button">Preview Sinkronisasi</button>
+      <span id="sinkron-loading" class="htmx-indicator text-sm text-slate-500">Memuat...</span>
+    </div>
+  </form>
+
+  <div id="sinkron-preview">
+    <div class="rounded-lg border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500">
+      Lengkapi filter lalu klik Preview Sinkronisasi.
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    const form = document.getElementById("sinkron-filter");
+    const preview = document.getElementById("sinkron-preview");
+    if (!form || !preview) return;
+    form.addEventListener("change", function () {
+      preview.innerHTML = '<div class="rounded-lg border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500">Filter berubah. Jalankan preview kembali.</div>';
+    });
+    document.body.addEventListener("htmx:beforeRequest", function (event) {
+      if (!form.contains(event.detail.elt)) return;
+      form.querySelectorAll("button").forEach((button) => button.disabled = true);
+    });
+    document.body.addEventListener("htmx:afterRequest", function (event) {
+      if (!form.contains(event.detail.elt)) return;
+      form.querySelectorAll("button").forEach((button) => button.disabled = false);
+    });
+    document.body.addEventListener("htmx:beforeSwap", function (event) {
+      if (event.detail.target !== preview || event.detail.xhr.status < 400) return;
+      event.detail.shouldSwap = true;
+      event.detail.isError = false;
+    });
+  })();
+</script>
+{% endblock %}

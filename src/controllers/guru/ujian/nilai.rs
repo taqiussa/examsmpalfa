@@ -25,9 +25,9 @@ struct ExportMetaRow {
 }
 
 #[derive(Clone, Serialize, sqlx::FromRow)]
-struct UjianNilaiOption {
-    id: i64,
-    title: String,
+pub(crate) struct UjianNilaiOption {
+    pub(crate) id: i64,
+    pub(crate) title: String,
 }
 
 #[derive(Clone, sqlx::FromRow)]
@@ -243,7 +243,7 @@ pub async fn nilai_kelas_mapel_export_jawaban(
     excel_response(body, export_filename("hasil-nilai-jawaban", &meta, &tahun))
 }
 
-async fn fetch_ujian_options(
+pub(crate) async fn fetch_ujian_options(
     db: &MySqlPool,
     mata_pelajaran_id: i64,
     tahun: &str,
@@ -274,7 +274,7 @@ fn selected_ujian_id(requested: Option<i64>, options: &[UjianNilaiOption]) -> Op
     requested.filter(|id| *id > 0 && options.iter().any(|option| option.id == *id))
 }
 
-async fn validated_ujian_id(
+pub(crate) async fn validated_ujian_id(
     db: &MySqlPool,
     requested: Option<i64>,
     mata_pelajaran_id: i64,
@@ -298,7 +298,7 @@ async fn validated_ujian_id(
     selected.map(Some).ok_or(StatusCode::BAD_REQUEST)
 }
 
-async fn fetch_nilai_kelas_rows(
+pub(crate) async fn fetch_nilai_kelas_rows(
     db: &MySqlPool,
     kelas_id: i64,
     mata_pelajaran_id: i64,

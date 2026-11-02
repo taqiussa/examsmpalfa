@@ -312,6 +312,79 @@ async fn init_schema(pool: &MySqlPool) {
             created_at DATETIME,
             updated_at DATETIME
         );
+
+        CREATE TABLE ujians (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            mata_pelajaran_id BIGINT NOT NULL,
+            user_id BIGINT UNSIGNED,
+            tahun VARCHAR(20) NOT NULL,
+            title VARCHAR(255) NOT NULL,
+            description TEXT,
+            tanggal DATE NOT NULL,
+            waktu_menit INT NOT NULL DEFAULT 60,
+            total_soal INT DEFAULT 0,
+            is_active TINYINT NOT NULL DEFAULT 1,
+            created_by BIGINT,
+            created_at DATETIME,
+            updated_at DATETIME
+        );
+
+        CREATE TABLE hasil_nilais (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            nis VARCHAR(20) NOT NULL,
+            ujian_id BIGINT NOT NULL,
+            mata_pelajaran_id BIGINT NOT NULL,
+            tahun VARCHAR(20) NOT NULL,
+            total_benar DECIMAL(5,2) NOT NULL DEFAULT 0,
+            total_salah DECIMAL(5,2) NOT NULL DEFAULT 0,
+            total_pg DECIMAL(5,2) NOT NULL DEFAULT 0,
+            total_uraian DECIMAL(5,2) NOT NULL DEFAULT 0,
+            total_nilai DECIMAL(5,2) NOT NULL DEFAULT 0,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_hasil_nilai (nis, ujian_id, mata_pelajaran_id, tahun)
+        );
+
+        CREATE TABLE kategori_nilais (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            nama VARCHAR(255) NOT NULL
+        );
+
+        CREATE TABLE jenis_penilaians (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            nama VARCHAR(255) NOT NULL,
+            kategori_nilai_id TINYINT UNSIGNED NOT NULL
+        );
+
+        CREATE TABLE penilaian_rapors (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            tingkat TINYINT UNSIGNED NOT NULL,
+            tahun VARCHAR(15) NOT NULL,
+            semester VARCHAR(2),
+            kategori_nilai_id TINYINT UNSIGNED NOT NULL,
+            jenis_penilaian_id TINYINT UNSIGNED NOT NULL,
+            created_at TIMESTAMP NULL,
+            updated_at TIMESTAMP NULL
+        );
+
+        CREATE TABLE penilaians (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            tanggal DATE,
+            nis MEDIUMINT UNSIGNED,
+            tahun VARCHAR(15) NOT NULL,
+            semester VARCHAR(2),
+            kelas_id TINYINT UNSIGNED NOT NULL,
+            mata_pelajaran_id TINYINT UNSIGNED NOT NULL,
+            kategori_nilai_id TINYINT UNSIGNED NOT NULL,
+            jenis_penilaian_id TINYINT UNSIGNED NOT NULL,
+            nilai INT,
+            user_id MEDIUMINT UNSIGNED,
+            created_at TIMESTAMP NULL,
+            updated_at TIMESTAMP NULL,
+            UNIQUE KEY penilaians_unique
+                (nis, tahun, semester, kelas_id, mata_pelajaran_id,
+                 kategori_nilai_id, jenis_penilaian_id)
+        );
     "#;
 
     for statement in schema.split(';') {

@@ -1,0 +1,27 @@
+<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+  <div class="flex flex-col space-y-1 text-md text-slate-600">
+    <label class="text-sm text-slate-600">Tingkat</label>
+    <input class="input bg-slate-100" value="{% if data.tingkat %}{{ data.tingkat }}{% else %}-{% endif %}" disabled>
+  </div>
+  <div class="flex flex-col space-y-1 text-md text-slate-600">
+    <label class="text-sm text-slate-600">Kategori Nilai</label>
+    <select name="kategori_nilai_id" class="input" {% if data.categories | length == 0 %}disabled{% endif %} required>
+      <option value="">Pilih kategori nilai...</option>
+      {% for category in data.categories %}
+      <option value="{{ category.id }}" {% if data.kategori_nilai_id==category.id %}selected{% endif %}>{{ category.nama }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="flex flex-col space-y-1 text-md text-slate-600">
+    <label class="text-sm text-slate-600">Jenis Penilaian</label>
+    <select name="jenis_penilaian_id" class="input" {% if data.types | length == 0 %}disabled{% endif %} required>
+      <option value="">Pilih jenis penilaian...</option>
+      {% for kind in data.types %}
+      <option value="{{ kind.id }}" {% if data.jenis_penilaian_id==kind.id %}selected{% endif %}>{{ kind.nama }}</option>
+      {% endfor %}
+    </select>
+  </div>
+</div>
+{% if data.tingkat and data.categories | length == 0 %}
+<p class="mt-2 text-sm text-amber-700">Tidak ada referensi penilaian untuk kombinasi tahun, semester, dan tingkat ini.</p>
+{% endif %}

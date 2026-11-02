@@ -121,6 +121,42 @@ mod tests {
 
     #[tokio::test]
     #[serial]
+    async fn sinkron_penilaian_is_available_to_admin_and_forbidden_to_non_admin() {
+        let Some(test_db) = crate::test_support::TestDb::try_new().await else {
+            return;
+        };
+        let seed = crate::test_support::seed_base_data(&test_db.pool).await;
+        let app = build_app(test_db.pool.clone());
+
+        let admin = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/sinkron-penilaian")
+                    .header("cookie", format!("auth_identity=web.{}", seed.admin_id))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let guru = app
+            .oneshot(
+                Request::builder()
+                    .uri("/sinkron-penilaian")
+                    .header("cookie", format!("auth_identity=web.{}", seed.guru_id))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(admin.status(), StatusCode::OK);
+        assert_eq!(guru.status(), StatusCode::FORBIDDEN);
+        test_db.teardown().await;
+    }
+
+    #[tokio::test]
+    #[serial]
     async fn upload_peserta_is_available_to_guru_and_forbidden_to_admin() {
         let Some(test_db) = crate::test_support::TestDb::try_new().await else {
             return;

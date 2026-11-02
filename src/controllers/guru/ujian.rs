@@ -124,15 +124,15 @@ pub struct UraianScoreForm {
 }
 
 #[derive(Serialize, FromRow)]
-struct NilaiKelasRow {
-    nis: String,
-    nama: Option<String>,
-    kelas: Option<String>,
-    total_benar: Option<f64>,
-    total_salah: Option<f64>,
-    nilai_pg: Option<f64>,
-    nilai_uraian: Option<f64>,
-    total_nilai: Option<f64>,
+pub(crate) struct NilaiKelasRow {
+    pub(crate) nis: String,
+    pub(crate) nama: Option<String>,
+    pub(crate) kelas: Option<String>,
+    pub(crate) total_benar: Option<f64>,
+    pub(crate) total_salah: Option<f64>,
+    pub(crate) nilai_pg: Option<f64>,
+    pub(crate) nilai_uraian: Option<f64>,
+    pub(crate) total_nilai: Option<f64>,
 }
 
 #[derive(Serialize)]
@@ -148,9 +148,9 @@ struct CreateUjianData {
 }
 
 #[derive(Serialize, FromRow)]
-struct MapelOption {
-    id: i64,
-    nama: String,
+pub(crate) struct MapelOption {
+    pub(crate) id: i64,
+    pub(crate) nama: String,
 }
 
 #[derive(Deserialize)]
@@ -314,7 +314,7 @@ fn contains_data_image(html: &str) -> bool {
     html.contains("data:image")
 }
 
-async fn fetch_mapel_options(db: &MySqlPool) -> Vec<MapelOption> {
+pub(crate) async fn fetch_mapel_options(db: &MySqlPool) -> Vec<MapelOption> {
     sqlx::query_as::<_, MapelOption>(
         "SELECT CAST(id AS SIGNED) as id, nama FROM mata_pelajarans ORDER BY nama ASC",
     )
@@ -626,7 +626,7 @@ pub async fn ujian_show(
     Html(html.0).into_response()
 }
 
-mod nilai;
+pub(crate) mod nilai;
 mod progress;
 mod status_peserta;
 mod uraian;
