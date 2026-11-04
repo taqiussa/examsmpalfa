@@ -29,19 +29,14 @@
       </select>
     </div>
 
-    <div id="sinkron-ujian-options"
-      hx-get="/sinkron-penilaian/ujian-options"
-      hx-trigger="load, change from:#sinkron-filter select[name='tahun'], change from:#sinkron-filter select[name='mata_pelajaran_id']"
-      hx-include="#sinkron-filter" hx-target="this" hx-swap="innerHTML">
+    <div id="sinkron-ujian-options">
       {% include "admin/_sinkron_ujian_options.html" %}
     </div>
 
-    <div id="sinkron-reference-options" class="md:col-span-2 xl:col-span-3"
-      hx-get="/sinkron-penilaian/reference-options"
-      hx-trigger="load, change from:#sinkron-filter select[name='tahun'], change from:#sinkron-filter select[name='semester'], change from:#sinkron-filter select[name='kelas_id'], change from:#sinkron-filter select[name='kategori_nilai_id']"
-      hx-include="#sinkron-filter" hx-target="this" hx-swap="innerHTML">
-      <div class="text-sm text-slate-500">Pilih tahun, semester, dan kelas untuk memuat referensi.</div>
+    <div id="sinkron-reference-options" class="md:col-span-2 xl:col-span-3">
+      {% include "admin/_sinkron_reference_options.html" %}
     </div>
+    <p id="sinkron-reference-error" class="hidden md:col-span-2 xl:col-span-3 text-sm text-rose-700"></p>
 
     <div class="flex items-end gap-2 md:col-span-2 xl:col-span-4">
       <button type="submit" class="button" id="preview-button">Preview Sinkronisasi</button>
@@ -64,6 +59,19 @@
     form.addEventListener("change", function () {
       preview.innerHTML = '<div class="rounded-lg border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500">Filter berubah. Jalankan preview kembali.</div>';
     });
+    form.addEventListener("change", function (event) {
+      if (!event.target.matches("select[name='tahun'], select[name='semester'], select[name='kelas_id'], select[name='kategori_nilai_id']")) return;
+      const referenceOptions = document.getElementById("sinkron-reference-options");
+      const error = document.getElementById("sinkron-reference-error");
+      if (!referenceOptions || !window.htmx) return;
+      error.classList.add("hidden");
+      htmx.ajax("GET", "/sinkron-penilaian/reference-options", {
+        source: referenceOptions,
+        target: referenceOptions,
+        swap: "innerHTML",
+        values: Object.fromEntries(new FormData(form))
+      });
+    });
     document.body.addEventListener("htmx:beforeRequest", function (event) {
       if (!form.contains(event.detail.elt)) return;
       form.querySelectorAll("button").forEach((button) => button.disabled = true);
@@ -76,6 +84,12 @@
       if (event.detail.target !== preview || event.detail.xhr.status < 400) return;
       event.detail.shouldSwap = true;
       event.detail.isError = false;
+    });
+    document.body.addEventListener("htmx:responseError", function (event) {
+      if (event.detail.target?.id !== "sinkron-reference-options") return;
+      const error = document.getElementById("sinkron-reference-error");
+      error.textContent = "Gagal memuat kategori dan jenis penilaian. Coba lagi.";
+      error.classList.remove("hidden");
     });
   })();
 </script>

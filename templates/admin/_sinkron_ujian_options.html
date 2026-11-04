@@ -4,7 +4,7 @@
     <option value="">Pilih ujian...</option>
     {% for ujian in data.list_ujian %}
     <option value="{{ ujian.id }}" {% if data.ujian_id==ujian.id %}selected{% endif %}>
-      {{ ujian.title }}
+      {{ ujian.title }} — {{ ujian.mata_pelajaran }} ({{ ujian.tahun }})
     </option>
     {% endfor %}
   </select>

@@ -12,10 +12,7 @@ use tera::Context;
 
 use crate::{
     controllers::guru::ujian::{
-        MapelOption, fetch_mapel_options,
-        nilai::{
-            UjianNilaiOption, fetch_nilai_kelas_rows, fetch_ujian_options, validated_ujian_id,
-        },
+        MapelOption, NilaiKelasRow, fetch_mapel_options, nilai::fetch_nilai_kelas_rows,
     },
     utils::{
         list_kelas::{ListKelas, list_kelas},
@@ -43,13 +40,25 @@ struct SinkronPageData {
     semester: u8,
     list_kelas: Vec<ListKelas>,
     list_mapel: Vec<MapelOption>,
-    list_ujian: Vec<UjianNilaiOption>,
+    list_ujian: Vec<SinkronUjianOption>,
     kelas_id: i64,
     mata_pelajaran_id: i64,
     ujian_id: i64,
     kategori_nilai_id: i64,
     jenis_penilaian_id: i64,
     require_kelas: bool,
+    categories: Vec<ReferenceCategory>,
+    types: Vec<ReferenceType>,
+    tingkat: Option<u8>,
+    reference_error: Option<String>,
+}
+
+#[derive(Clone, Serialize, sqlx::FromRow)]
+struct SinkronUjianOption {
+    id: i64,
+    title: String,
+    mata_pelajaran: String,
+    tahun: String,
 }
 
 #[derive(Clone, Serialize, sqlx::FromRow)]
@@ -67,15 +76,16 @@ struct ReferenceData {
     kategori_nilai_id: i64,
     jenis_penilaian_id: i64,
     tingkat: Option<u8>,
+    error: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 struct ReferenceCategory {
     id: i64,
     nama: String,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 struct ReferenceType {
     id: i64,
     nama: String,
@@ -83,7 +93,7 @@ struct ReferenceType {
 
 #[derive(Serialize)]
 struct UjianOptionsData {
-    list_ujian: Vec<UjianNilaiOption>,
+    list_ujian: Vec<SinkronUjianOption>,
     ujian_id: i64,
 }
 
@@ -149,6 +159,11 @@ struct ValidatedContext {
     jenis_penilaian_id: i64,
 }
 
+#[derive(sqlx::FromRow)]
+struct SourceUjian {
+    mata_pelajaran_id: i64,
+}
+
 pub async fn sinkron_penilaian_page(
     ctx: PageContext,
     Query(filter): Query<SinkronFilter>,
@@ -157,12 +172,13 @@ pub async fn sinkron_penilaian_page(
     let tahun = filter.tahun.clone().unwrap_or_else(data_tahun);
     let semester = filter.semester.unwrap_or_else(|| data_semester() as u8);
     let mata_pelajaran_id = filter.mata_pelajaran_id.unwrap_or(0);
-    let list_ujian = fetch_ujian_options(&db, mata_pelajaran_id, &tahun).await;
+    let list_ujian = fetch_sinkron_ujian_options(&db).await;
     let ujian_id = filter
         .ujian_id
         .filter(|id| list_ujian.iter().any(|ujian| ujian.id == *id))
         .unwrap_or(0);
 
+    let references = fetch_reference_data(&db, &filter, &tahun, semester).await;
     let data = SinkronPageData {
         tahun,
         semester,
@@ -175,6 +191,10 @@ pub async fn sinkron_penilaian_page(
         kategori_nilai_id: filter.kategori_nilai_id.unwrap_or(0),
         jenis_penilaian_id: filter.jenis_penilaian_id.unwrap_or(0),
         require_kelas: true,
+        categories: references.categories,
+        types: references.types,
+        tingkat: references.tingkat,
+        reference_error: references.error,
     };
 
     render(
@@ -190,8 +210,7 @@ pub async fn sinkron_ujian_options(
     Query(filter): Query<SinkronFilter>,
     axum::Extension(db): axum::Extension<MySqlPool>,
 ) -> Html<String> {
-    let tahun = filter.tahun.unwrap_or_else(data_tahun);
-    let options = fetch_ujian_options(&db, filter.mata_pelajaran_id.unwrap_or(0), &tahun).await;
+    let options = fetch_sinkron_ujian_options(&db).await;
     let selected = filter
         .ujian_id
         .filter(|id| options.iter().any(|ujian| ujian.id == *id))
@@ -216,65 +235,12 @@ pub async fn sinkron_reference_options(
     Query(filter): Query<SinkronFilter>,
     axum::Extension(db): axum::Extension<MySqlPool>,
 ) -> Html<String> {
-    let tahun = filter.tahun.unwrap_or_else(data_tahun);
+    let tahun = filter.tahun.clone().unwrap_or_else(data_tahun);
     let semester = filter.semester.unwrap_or_else(|| data_semester() as u8);
-    let tingkat = fetch_class_level(&db, filter.kelas_id.unwrap_or(0))
-        .await
-        .ok();
-    let references = if let Some(tingkat) = tingkat {
-        fetch_references(&db, &tahun, semester, tingkat)
-            .await
-            .unwrap_or_default()
-    } else {
-        Vec::new()
-    };
-    let requested_category = filter.kategori_nilai_id.unwrap_or(0);
-    let category_is_valid = references
-        .iter()
-        .any(|item| item.kategori_nilai_id == requested_category);
-    let kategori_nilai_id = if category_is_valid {
-        requested_category
-    } else {
-        0
-    };
-    let requested_type = filter.jenis_penilaian_id.unwrap_or(0);
-    let jenis_penilaian_id = references
-        .iter()
-        .any(|item| {
-            item.kategori_nilai_id == kategori_nilai_id && item.jenis_penilaian_id == requested_type
-        })
-        .then_some(requested_type)
-        .unwrap_or(0);
-
-    let mut categories = Vec::new();
-    let mut seen_categories = HashSet::new();
-    let mut types = Vec::new();
-    for reference in references {
-        if seen_categories.insert(reference.kategori_nilai_id) {
-            categories.push(ReferenceCategory {
-                id: reference.kategori_nilai_id,
-                nama: reference.kategori_nilai.clone(),
-            });
-        }
-        if reference.kategori_nilai_id == kategori_nilai_id {
-            types.push(ReferenceType {
-                id: reference.jenis_penilaian_id,
-                nama: reference.jenis_penilaian,
-            });
-        }
-    }
+    let references = fetch_reference_data(&db, &filter, &tahun, semester).await;
 
     let mut tera_ctx = Context::new();
-    tera_ctx.insert(
-        "data",
-        &ReferenceData {
-            categories,
-            types,
-            kategori_nilai_id,
-            jenis_penilaian_id,
-            tingkat,
-        },
-    );
+    tera_ctx.insert("data", &references);
     Html(
         ctx.tera
             .render("admin/_sinkron_reference_options.html", &tera_ctx)
@@ -435,15 +401,12 @@ async fn build_preview(
         .await
         .map_err(|message| (StatusCode::BAD_REQUEST, message))?;
 
-    match validated_ujian_id(db, Some(ujian_id), mata_pelajaran_id, &tahun).await {
-        Ok(Some(_)) => {}
-        Ok(None) | Err(StatusCode::BAD_REQUEST) => {
-            return Err((
-                StatusCode::BAD_REQUEST,
-                "Ujian tidak sesuai dengan tahun dan mata pelajaran terpilih.".into(),
-            ));
-        }
-        Err(status) => return Err((status, "Gagal memvalidasi ujian.".into())),
+    let source_ujian = validate_sinkron_ujian(db, ujian_id).await?;
+    if source_ujian.mata_pelajaran_id != mata_pelajaran_id {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Ujian yang dipilih berasal dari mata pelajaran lain. Pilih mata pelajaran tujuan yang sama dengan ujian.".into(),
+        ));
     }
 
     let reference_count: i64 = sqlx::query_scalar(
@@ -469,8 +432,14 @@ async fn build_preview(
         ));
     }
 
-    let source_rows =
-        fetch_nilai_kelas_rows(db, kelas_id, mata_pelajaran_id, &tahun, Some(ujian_id)).await;
+    let source_rows = fetch_sinkron_nilai_kelas_rows(
+        db,
+        kelas_id,
+        &tahun,
+        ujian_id,
+        source_ujian.mata_pelajaran_id,
+    )
+    .await;
     let existing = sqlx::query_as::<_, ExistingScore>(
         r#"
         SELECT nis, MAX(nilai) AS nilai, COUNT(*) AS record_count
@@ -623,6 +592,171 @@ async fn fetch_class_level(db: &MySqlPool, kelas_id: i64) -> Result<u8, String> 
         .trim()
         .parse::<u8>()
         .map_err(|_| "Tingkat kelas tidak valid.".to_string())
+}
+
+async fn fetch_sinkron_ujian_options(db: &MySqlPool) -> Vec<SinkronUjianOption> {
+    sqlx::query_as::<_, SinkronUjianOption>(
+        r#"
+        SELECT u.id, u.title, COALESCE(mp.nama, '-') AS mata_pelajaran, u.tahun
+        FROM ujians u
+        LEFT JOIN mata_pelajarans mp ON mp.id = u.mata_pelajaran_id
+        ORDER BY u.tanggal DESC, u.id DESC
+        "#,
+    )
+    .fetch_all(db)
+    .await
+    .unwrap_or_else(|error| {
+        eprintln!("ERROR fetch sinkron ujian options: {error:?}");
+        Vec::new()
+    })
+}
+
+async fn validate_sinkron_ujian(
+    db: &MySqlPool,
+    ujian_id: i64,
+) -> Result<SourceUjian, (StatusCode, String)> {
+    sqlx::query_as::<_, SourceUjian>("SELECT mata_pelajaran_id FROM ujians WHERE id = ? LIMIT 1")
+        .bind(ujian_id)
+        .fetch_optional(db)
+        .await
+        .map_err(internal_error("memvalidasi ujian"))?
+        .ok_or_else(|| {
+            (
+                StatusCode::BAD_REQUEST,
+                "Ujian yang dipilih tidak ditemukan.".into(),
+            )
+        })
+}
+
+async fn fetch_sinkron_nilai_kelas_rows(
+    db: &MySqlPool,
+    kelas_id: i64,
+    tahun_tujuan: &str,
+    ujian_id: i64,
+    mata_pelajaran_id: i64,
+) -> Vec<NilaiKelasRow> {
+    // Daftar siswa tetap mengikuti konteks penilaian tujuan, sedangkan hasil
+    // selalu diikat ke identitas ujian sumber (bukan tahun tujuan).
+    let mut rows = fetch_nilai_kelas_rows(db, kelas_id, 0, tahun_tujuan, None).await;
+    for row in &mut rows {
+        row.total_benar = None;
+        row.total_salah = None;
+        row.nilai_pg = None;
+        row.nilai_uraian = None;
+        row.total_nilai = None;
+    }
+
+    let hasil = sqlx::query_as::<_, (String, f64, f64, f64, f64, f64)>(
+        r#"
+        SELECT TRIM(nis) AS nis,
+            CAST(COALESCE(total_benar, 0) AS DOUBLE),
+            CAST(COALESCE(total_salah, 0) AS DOUBLE),
+            CAST(COALESCE(total_pg, 0) AS DOUBLE),
+            CAST(COALESCE(total_uraian, 0) AS DOUBLE),
+            CAST(COALESCE(total_nilai, 0) AS DOUBLE)
+        FROM hasil_nilais
+        WHERE ujian_id = ? AND mata_pelajaran_id = ?
+        "#,
+    )
+    .bind(ujian_id)
+    .bind(mata_pelajaran_id)
+    .fetch_all(db)
+    .await;
+
+    let Ok(hasil) = hasil else {
+        if let Err(error) = hasil {
+            eprintln!("ERROR fetch sinkron hasil nilai: {error:?}");
+        }
+        return rows;
+    };
+    let nilai = hasil
+        .into_iter()
+        .map(|(nis, benar, salah, pg, uraian, total)| (nis, (benar, salah, pg, uraian, total)))
+        .collect::<HashMap<_, _>>();
+    for row in &mut rows {
+        if let Some((benar, salah, pg, uraian, total)) = nilai.get(&row.nis) {
+            row.total_benar = Some(*benar);
+            row.total_salah = Some(*salah);
+            row.nilai_pg = Some(*pg);
+            row.nilai_uraian = Some(*uraian);
+            row.total_nilai = Some(*total);
+        }
+    }
+    rows
+}
+
+async fn fetch_reference_data(
+    db: &MySqlPool,
+    filter: &SinkronFilter,
+    tahun: &str,
+    semester: u8,
+) -> ReferenceData {
+    let tingkat = match fetch_class_level(db, filter.kelas_id.unwrap_or(0)).await {
+        Ok(tingkat) => Some(tingkat),
+        Err(message) => {
+            return ReferenceData {
+                categories: Vec::new(),
+                types: Vec::new(),
+                kategori_nilai_id: 0,
+                jenis_penilaian_id: 0,
+                tingkat: None,
+                error: Some(message),
+            };
+        }
+    };
+    let references = match fetch_references(db, tahun, semester, tingkat.unwrap()).await {
+        Ok(references) => references,
+        Err(error) => {
+            eprintln!("ERROR fetch sinkron references: {error:?}");
+            return ReferenceData {
+                categories: Vec::new(),
+                types: Vec::new(),
+                kategori_nilai_id: 0,
+                jenis_penilaian_id: 0,
+                tingkat,
+                error: Some("Gagal memuat referensi penilaian. Coba lagi.".into()),
+            };
+        }
+    };
+    let requested_category = filter.kategori_nilai_id.unwrap_or(0);
+    let kategori_nilai_id = references
+        .iter()
+        .any(|item| item.kategori_nilai_id == requested_category)
+        .then_some(requested_category)
+        .unwrap_or(0);
+    let requested_type = filter.jenis_penilaian_id.unwrap_or(0);
+    let jenis_penilaian_id = references
+        .iter()
+        .any(|item| {
+            item.kategori_nilai_id == kategori_nilai_id && item.jenis_penilaian_id == requested_type
+        })
+        .then_some(requested_type)
+        .unwrap_or(0);
+    let mut categories = Vec::new();
+    let mut seen_categories = HashSet::new();
+    let mut types = Vec::new();
+    for reference in references {
+        if seen_categories.insert(reference.kategori_nilai_id) {
+            categories.push(ReferenceCategory {
+                id: reference.kategori_nilai_id,
+                nama: reference.kategori_nilai.clone(),
+            });
+        }
+        if reference.kategori_nilai_id == kategori_nilai_id {
+            types.push(ReferenceType {
+                id: reference.jenis_penilaian_id,
+                nama: reference.jenis_penilaian,
+            });
+        }
+    }
+    ReferenceData {
+        categories,
+        types,
+        kategori_nilai_id,
+        jenis_penilaian_id,
+        tingkat,
+        error: None,
+    }
 }
 
 async fn fetch_references(
@@ -907,6 +1041,111 @@ mod tests {
         filter.jenis_penilaian_id = Some(999);
         let error = build_preview(&test_db.pool, &filter).await.unwrap_err();
         assert_eq!(error.0, StatusCode::BAD_REQUEST);
+        test_db.teardown().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn sinkron_exam_options_include_inactive_old_and_other_subject_exams() {
+        let Some(test_db) = TestDb::try_new().await else {
+            return;
+        };
+        let seed = seed_base_data(&test_db.pool).await;
+        let filter = seed_sync_context(&test_db.pool, &seed, 83.0).await;
+        sqlx::query("INSERT INTO mata_pelajarans (nama, kelompok) VALUES ('Sejarah', 'A')")
+            .execute(&test_db.pool)
+            .await
+            .unwrap();
+        let other_mapel: i64 = sqlx::query_scalar("SELECT CAST(LAST_INSERT_ID() AS SIGNED)")
+            .fetch_one(&test_db.pool)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO ujians (mata_pelajaran_id, tahun, title, tanggal, waktu_menit, is_active) VALUES (?, '2020/2021', 'Ujian Lama Nonaktif', '2020-01-01', 60, 0)",
+        )
+        .bind(other_mapel)
+        .execute(&test_db.pool)
+        .await
+        .unwrap();
+        let old_id: i64 = sqlx::query_scalar("SELECT CAST(LAST_INSERT_ID() AS SIGNED)")
+            .fetch_one(&test_db.pool)
+            .await
+            .unwrap();
+
+        let options = fetch_sinkron_ujian_options(&test_db.pool).await;
+        assert!(
+            options
+                .iter()
+                .any(|option| option.id == filter.ujian_id.unwrap())
+        );
+        assert!(options.iter().any(|option| {
+            option.id == old_id
+                && option.title == "Ujian Lama Nonaktif"
+                && option.mata_pelajaran == "Sejarah"
+                && option.tahun == "2020/2021"
+        }));
+        test_db.teardown().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn preview_reads_old_exam_by_exam_identity_and_rejects_subject_mismatch() {
+        let Some(test_db) = TestDb::try_new().await else {
+            return;
+        };
+        let seed = seed_base_data(&test_db.pool).await;
+        let filter = seed_sync_context(&test_db.pool, &seed, 83.0).await;
+        sqlx::query("UPDATE ujians SET tahun = '2020/2021' WHERE id = ?")
+            .bind(filter.ujian_id)
+            .execute(&test_db.pool)
+            .await
+            .unwrap();
+        sqlx::query("UPDATE hasil_nilais SET tahun = '2020/2021' WHERE ujian_id = ?")
+            .bind(filter.ujian_id)
+            .execute(&test_db.pool)
+            .await
+            .unwrap();
+        let (rows, _, _) = build_preview(&test_db.pool, &filter).await.unwrap();
+        assert_eq!(rows[0].total_nilai, Some(83.0));
+
+        sqlx::query("INSERT INTO mata_pelajarans (nama, kelompok) VALUES ('IPS', 'A')")
+            .execute(&test_db.pool)
+            .await
+            .unwrap();
+        let other_mapel: i64 = sqlx::query_scalar("SELECT CAST(LAST_INSERT_ID() AS SIGNED)")
+            .fetch_one(&test_db.pool)
+            .await
+            .unwrap();
+        sqlx::query("UPDATE ujians SET mata_pelajaran_id = ? WHERE id = ?")
+            .bind(other_mapel)
+            .bind(filter.ujian_id)
+            .execute(&test_db.pool)
+            .await
+            .unwrap();
+        let error = build_preview(&test_db.pool, &filter).await.unwrap_err();
+        assert_eq!(error.0, StatusCode::BAD_REQUEST);
+        assert!(error.1.contains("mata pelajaran lain"));
+        test_db.teardown().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn reference_data_keeps_only_valid_category_type_pairs() {
+        let Some(test_db) = TestDb::try_new().await else {
+            return;
+        };
+        let seed = seed_base_data(&test_db.pool).await;
+        let mut filter = seed_sync_context(&test_db.pool, &seed, 83.0).await;
+        let data = fetch_reference_data(&test_db.pool, &filter, &seed.tahun, 1).await;
+        assert_eq!(data.categories.len(), 1);
+        assert_eq!(data.types.len(), 1);
+        assert_eq!(data.jenis_penilaian_id, filter.jenis_penilaian_id.unwrap());
+
+        filter.jenis_penilaian_id = Some(999);
+        let data = fetch_reference_data(&test_db.pool, &filter, &seed.tahun, 1).await;
+        assert_eq!(data.kategori_nilai_id, filter.kategori_nilai_id.unwrap());
+        assert_eq!(data.jenis_penilaian_id, 0);
+        assert_eq!(data.types.len(), 1);
         test_db.teardown().await;
     }
 

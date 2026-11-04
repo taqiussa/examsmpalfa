@@ -14,14 +14,16 @@
   </div>
   <div class="flex flex-col space-y-1 text-md text-slate-600">
     <label class="text-sm text-slate-600">Jenis Penilaian</label>
-    <select name="jenis_penilaian_id" class="input" {% if data.types | length == 0 %}disabled{% endif %} required>
-      <option value="">Pilih jenis penilaian...</option>
+    <select name="jenis_penilaian_id" class="input" {% if data.kategori_nilai_id == 0 or data.types | length == 0 %}disabled{% endif %} required>
+      <option value="">{% if data.kategori_nilai_id == 0 %}Pilih kategori nilai terlebih dahulu...{% else %}Pilih jenis penilaian...{% endif %}</option>
       {% for kind in data.types %}
       <option value="{{ kind.id }}" {% if data.jenis_penilaian_id==kind.id %}selected{% endif %}>{{ kind.nama }}</option>
       {% endfor %}
     </select>
   </div>
 </div>
-{% if data.tingkat and data.categories | length == 0 %}
+{% if data.error %}
+<p class="mt-2 text-sm text-rose-700">{{ data.error }}</p>
+{% elif data.tingkat and data.categories | length == 0 %}
 <p class="mt-2 text-sm text-amber-700">Tidak ada referensi penilaian untuk kombinasi tahun, semester, dan tingkat ini.</p>
 {% endif %}
