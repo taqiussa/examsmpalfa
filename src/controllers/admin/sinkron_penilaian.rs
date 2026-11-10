@@ -30,21 +30,21 @@ use crate::{
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct SinkronFilter {
     pub tahun: Option<String>,
-    #[serde(deserialize_with = "deserialize_optional_number")]
+    #[serde(default, deserialize_with = "deserialize_optional_number")]
     pub semester: Option<u8>,
-    #[serde(deserialize_with = "deserialize_optional_number")]
+    #[serde(default, deserialize_with = "deserialize_optional_number")]
     pub kelas_id: Option<i64>,
-    #[serde(deserialize_with = "deserialize_optional_number")]
+    #[serde(default, deserialize_with = "deserialize_optional_number")]
     pub mata_pelajaran_id: Option<i64>,
-    #[serde(deserialize_with = "deserialize_optional_number")]
+    #[serde(default, deserialize_with = "deserialize_optional_number")]
     pub ujian_id: Option<i64>,
-    #[serde(deserialize_with = "deserialize_optional_number")]
+    #[serde(default, deserialize_with = "deserialize_optional_number")]
     pub kategori_nilai_id: Option<i64>,
-    #[serde(deserialize_with = "deserialize_optional_number")]
+    #[serde(default, deserialize_with = "deserialize_optional_number")]
     pub jenis_penilaian_id: Option<i64>,
     /// Monotonic client-side request token used only to prevent stale HTMX
     /// reference responses from replacing newer form state.
-    #[serde(deserialize_with = "deserialize_optional_number")]
+    #[serde(default, deserialize_with = "deserialize_optional_number")]
     pub reference_token: Option<u64>,
 }
 
@@ -980,6 +980,29 @@ mod tests {
         assert_eq!(summary.skipped, 1);
         assert_eq!(summary.conflict, 1);
         assert_eq!(summary.writable, 2);
+    }
+
+    #[test]
+    fn optional_numeric_query_fields_accept_empty_values() {
+        // This reproduces the reference-options request sent while a class is
+        // selected before a subject and exam have been selected.
+        let filter: SinkronFilter = serde_urlencoded::from_str(
+            "tahun=2026+%2F+2027&semester=1&kelas_id=2&mata_pelajaran_id=&ujian_id=&reference_token=2",
+        )
+        .unwrap();
+
+        assert_eq!(filter.tahun.as_deref(), Some("2026 / 2027"));
+        assert_eq!(filter.semester, Some(1));
+        assert_eq!(filter.kelas_id, Some(2));
+        assert_eq!(filter.mata_pelajaran_id, None);
+        assert_eq!(filter.ujian_id, None);
+        assert_eq!(filter.reference_token, Some(2));
+    }
+
+    #[test]
+    fn optional_numeric_query_fields_reject_invalid_values() {
+        assert!(serde_urlencoded::from_str::<SinkronFilter>("kelas_id=abc").is_err());
+        assert!(serde_urlencoded::from_str::<SinkronFilter>("semester=xyz").is_err());
     }
 
     async fn seed_sync_context(db: &MySqlPool, seed: &SeedData, score: f64) -> SinkronFilter {

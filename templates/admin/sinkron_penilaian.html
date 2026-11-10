@@ -60,6 +60,15 @@
     if (!form || !preview) return;
     let referenceToken = 0;
 
+    function requestToken(event) {
+      const parameter = event.detail.requestConfig?.parameters?.reference_token;
+      if (parameter !== undefined) return Number(parameter);
+      const responseUrl = event.detail.xhr?.responseURL;
+      return responseUrl
+        ? Number(new URL(responseUrl, window.location.origin).searchParams.get("reference_token"))
+        : Number.NaN;
+    }
+
     function updatePreviewButton() {
       const button = document.getElementById("preview-button");
       if (!button) return;
@@ -104,7 +113,7 @@
     });
     document.body.addEventListener("htmx:afterRequest", function (event) {
       if (!form.contains(event.detail.elt)) return;
-      const token = Number(event.detail.requestConfig?.parameters?.reference_token);
+      const token = requestToken(event);
       const isReferenceRequest = event.detail.target?.id === "sinkron-reference-options";
       if (!isReferenceRequest || token === referenceToken) {
         form.querySelectorAll("button").forEach((button) => button.disabled = false);
@@ -129,7 +138,7 @@
     });
     document.body.addEventListener("htmx:responseError", function (event) {
       if (event.detail.target?.id !== "sinkron-reference-options") return;
-      const token = Number(event.detail.requestConfig?.parameters?.reference_token);
+      const token = requestToken(event);
       if (token !== referenceToken) return;
       const error = document.getElementById("sinkron-reference-error");
       error.textContent = "Gagal memuat kategori dan jenis penilaian. Coba lagi.";
