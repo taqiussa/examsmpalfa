@@ -32,6 +32,9 @@ pub struct SinkronFilter {
     pub ujian_id: Option<i64>,
     pub kategori_nilai_id: Option<i64>,
     pub jenis_penilaian_id: Option<i64>,
+    /// Monotonic client-side request token used only to prevent stale HTMX
+    /// reference responses from replacing newer form state.
+    pub reference_token: Option<u64>,
 }
 
 #[derive(Serialize)]
@@ -51,6 +54,7 @@ struct SinkronPageData {
     types: Vec<ReferenceType>,
     tingkat: Option<u8>,
     reference_error: Option<String>,
+    request_token: u64,
 }
 
 #[derive(Clone, Serialize, sqlx::FromRow)]
@@ -77,6 +81,7 @@ struct ReferenceData {
     jenis_penilaian_id: i64,
     tingkat: Option<u8>,
     error: Option<String>,
+    request_token: u64,
 }
 
 #[derive(Clone, Serialize)]
@@ -195,6 +200,7 @@ pub async fn sinkron_penilaian_page(
         types: references.types,
         tingkat: references.tingkat,
         reference_error: references.error,
+        request_token: 0,
     };
 
     render(
@@ -579,15 +585,19 @@ async fn fetch_class_level(db: &MySqlPool, kelas_id: i64) -> Result<u8, String> 
     if kelas_id <= 0 {
         return Err("Kelas wajib dipilih.".into());
     }
-    let level = sqlx::query_scalar::<_, String>("SELECT tingkat FROM kelas WHERE id = ? LIMIT 1")
-        .bind(kelas_id)
-        .fetch_optional(db)
-        .await
-        .map_err(|error| {
-            eprintln!("ERROR fetch class level: {error:?}");
-            "Gagal membaca tingkat kelas.".to_string()
-        })?
-        .ok_or_else(|| "Kelas tidak ditemukan.".to_string())?;
+    // `kelas.tingkat` is VARCHAR in the Laravel schema. Casting it to CHAR also
+    // keeps this decode compatible with installations that use a numeric column.
+    let level = sqlx::query_scalar::<_, String>(
+        "SELECT CAST(tingkat AS CHAR) FROM kelas WHERE id = ? LIMIT 1",
+    )
+    .bind(kelas_id)
+    .fetch_optional(db)
+    .await
+    .map_err(|error| {
+        eprintln!("ERROR fetch class level: {error:?}");
+        "Gagal membaca tingkat kelas.".to_string()
+    })?
+    .ok_or_else(|| "Kelas tidak ditemukan.".to_string())?;
     level
         .trim()
         .parse::<u8>()
@@ -691,7 +701,19 @@ async fn fetch_reference_data(
     tahun: &str,
     semester: u8,
 ) -> ReferenceData {
-    let tingkat = match fetch_class_level(db, filter.kelas_id.unwrap_or(0)).await {
+    let request_token = filter.reference_token.unwrap_or(0);
+    let Some(kelas_id) = filter.kelas_id.filter(|id| *id > 0) else {
+        return ReferenceData {
+            categories: Vec::new(),
+            types: Vec::new(),
+            kategori_nilai_id: 0,
+            jenis_penilaian_id: 0,
+            tingkat: None,
+            error: None,
+            request_token,
+        };
+    };
+    let tingkat = match fetch_class_level(db, kelas_id).await {
         Ok(tingkat) => Some(tingkat),
         Err(message) => {
             return ReferenceData {
@@ -701,6 +723,7 @@ async fn fetch_reference_data(
                 jenis_penilaian_id: 0,
                 tingkat: None,
                 error: Some(message),
+                request_token,
             };
         }
     };
@@ -715,6 +738,7 @@ async fn fetch_reference_data(
                 jenis_penilaian_id: 0,
                 tingkat,
                 error: Some("Gagal memuat referensi penilaian. Coba lagi.".into()),
+                request_token,
             };
         }
     };
@@ -756,6 +780,7 @@ async fn fetch_reference_data(
         jenis_penilaian_id,
         tingkat,
         error: None,
+        request_token,
     }
 }
 
@@ -1002,6 +1027,7 @@ mod tests {
             ujian_id: Some(ujian_id),
             kategori_nilai_id: Some(category_id),
             jenis_penilaian_id: Some(type_id),
+            reference_token: None,
         }
     }
 
@@ -1052,25 +1078,20 @@ mod tests {
         };
         let seed = seed_base_data(&test_db.pool).await;
         let filter = seed_sync_context(&test_db.pool, &seed, 83.0).await;
-        sqlx::query("INSERT INTO mata_pelajarans (nama, kelompok) VALUES ('Sejarah', 'A')")
-            .execute(&test_db.pool)
-            .await
-            .unwrap();
-        let other_mapel: i64 = sqlx::query_scalar("SELECT CAST(LAST_INSERT_ID() AS SIGNED)")
-            .fetch_one(&test_db.pool)
-            .await
-            .unwrap();
-        sqlx::query(
+        let other_mapel =
+            sqlx::query("INSERT INTO mata_pelajarans (nama, kelompok) VALUES ('Sejarah', 'A')")
+                .execute(&test_db.pool)
+                .await
+                .unwrap()
+                .last_insert_id() as i64;
+        let old_id = sqlx::query(
             "INSERT INTO ujians (mata_pelajaran_id, tahun, title, tanggal, waktu_menit, is_active) VALUES (?, '2020/2021', 'Ujian Lama Nonaktif', '2020-01-01', 60, 0)",
         )
         .bind(other_mapel)
         .execute(&test_db.pool)
         .await
-        .unwrap();
-        let old_id: i64 = sqlx::query_scalar("SELECT CAST(LAST_INSERT_ID() AS SIGNED)")
-            .fetch_one(&test_db.pool)
-            .await
-            .unwrap();
+        .unwrap()
+        .last_insert_id() as i64;
 
         let options = fetch_sinkron_ujian_options(&test_db.pool).await;
         assert!(
@@ -1108,14 +1129,12 @@ mod tests {
         let (rows, _, _) = build_preview(&test_db.pool, &filter).await.unwrap();
         assert_eq!(rows[0].total_nilai, Some(83.0));
 
-        sqlx::query("INSERT INTO mata_pelajarans (nama, kelompok) VALUES ('IPS', 'A')")
-            .execute(&test_db.pool)
-            .await
-            .unwrap();
-        let other_mapel: i64 = sqlx::query_scalar("SELECT CAST(LAST_INSERT_ID() AS SIGNED)")
-            .fetch_one(&test_db.pool)
-            .await
-            .unwrap();
+        let other_mapel =
+            sqlx::query("INSERT INTO mata_pelajarans (nama, kelompok) VALUES ('IPS', 'A')")
+                .execute(&test_db.pool)
+                .await
+                .unwrap()
+                .last_insert_id() as i64;
         sqlx::query("UPDATE ujians SET mata_pelajaran_id = ? WHERE id = ?")
             .bind(other_mapel)
             .bind(filter.ujian_id)
@@ -1146,6 +1165,75 @@ mod tests {
         assert_eq!(data.kategori_nilai_id, filter.kategori_nilai_id.unwrap());
         assert_eq!(data.jenis_penilaian_id, 0);
         assert_eq!(data.types.len(), 1);
+        test_db.teardown().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn class_level_is_read_from_the_selected_class_and_invalid_values_are_rejected() {
+        let Some(test_db) = TestDb::try_new().await else {
+            return;
+        };
+        let seed = seed_base_data(&test_db.pool).await;
+        sqlx::query("INSERT INTO kelas (nama, tingkat) VALUES ('8A', '8'), ('9A', '9')")
+            .execute(&test_db.pool)
+            .await
+            .unwrap();
+        let kelas_8: i64 =
+            sqlx::query_scalar("SELECT CAST(id AS SIGNED) FROM kelas WHERE nama = '8A'")
+                .fetch_one(&test_db.pool)
+                .await
+                .unwrap();
+        let kelas_9: i64 =
+            sqlx::query_scalar("SELECT CAST(id AS SIGNED) FROM kelas WHERE nama = '9A'")
+                .fetch_one(&test_db.pool)
+                .await
+                .unwrap();
+
+        assert_eq!(fetch_class_level(&test_db.pool, seed.kelas_id).await, Ok(7));
+        assert_eq!(fetch_class_level(&test_db.pool, kelas_8).await, Ok(8));
+        assert_eq!(fetch_class_level(&test_db.pool, kelas_9).await, Ok(9));
+
+        sqlx::query("UPDATE kelas SET tingkat = 'tidak-valid' WHERE id = ?")
+            .bind(kelas_9)
+            .execute(&test_db.pool)
+            .await
+            .unwrap();
+        assert!(
+            fetch_class_level(&test_db.pool, kelas_9)
+                .await
+                .unwrap_err()
+                .contains("tidak valid")
+        );
+        test_db.teardown().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn changing_class_resets_references_when_the_new_level_has_no_reference() {
+        let Some(test_db) = TestDb::try_new().await else {
+            return;
+        };
+        let seed = seed_base_data(&test_db.pool).await;
+        let mut filter = seed_sync_context(&test_db.pool, &seed, 83.0).await;
+        sqlx::query("INSERT INTO kelas (nama, tingkat) VALUES ('8A', '8')")
+            .execute(&test_db.pool)
+            .await
+            .unwrap();
+        let kelas_8: i64 =
+            sqlx::query_scalar("SELECT CAST(id AS SIGNED) FROM kelas WHERE nama = '8A'")
+                .fetch_one(&test_db.pool)
+                .await
+                .unwrap();
+
+        filter.kelas_id = Some(kelas_8);
+        let data = fetch_reference_data(&test_db.pool, &filter, &seed.tahun, 1).await;
+        assert_eq!(data.tingkat, Some(8));
+        assert!(data.categories.is_empty());
+        assert!(data.types.is_empty());
+        assert_eq!(data.kategori_nilai_id, 0);
+        assert_eq!(data.jenis_penilaian_id, 0);
+        assert!(data.error.is_none());
         test_db.teardown().await;
     }
 

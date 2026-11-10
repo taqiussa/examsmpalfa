@@ -1,7 +1,8 @@
+<div data-reference-token="{{ data.request_token }}">
 <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
   <div class="flex flex-col space-y-1 text-md text-slate-600">
-    <label class="text-sm text-slate-600">Tingkat</label>
-    <input class="input bg-slate-100" value="{% if data.tingkat %}{{ data.tingkat }}{% else %}-{% endif %}" disabled>
+    <label class="text-sm text-slate-600">Tingkat (Otomatis dari Kelas)</label>
+    <input class="input bg-slate-100" value="{% if data.tingkat %}{{ data.tingkat }}{% else %}Pilih kelas terlebih dahulu{% endif %}" readonly aria-live="polite">
   </div>
   <div class="flex flex-col space-y-1 text-md text-slate-600">
     <label class="text-sm text-slate-600">Kategori Nilai</label>
@@ -27,3 +28,4 @@
 {% elif data.tingkat and data.categories | length == 0 %}
 <p class="mt-2 text-sm text-amber-700">Tidak ada referensi penilaian untuk kombinasi tahun, semester, dan tingkat ini.</p>
 {% endif %}
+</div>

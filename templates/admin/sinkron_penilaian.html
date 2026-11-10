@@ -41,6 +41,7 @@
     <div class="flex items-end gap-2 md:col-span-2 xl:col-span-4">
       <button type="submit" class="button" id="preview-button">Preview Sinkronisasi</button>
       <span id="sinkron-loading" class="htmx-indicator text-sm text-slate-500">Memuat...</span>
+      <span id="sinkron-reference-loading" class="hidden text-sm text-slate-500" aria-live="polite">Memuat referensi...</span>
     </div>
   </form>
 
@@ -55,21 +56,39 @@
   (function () {
     const form = document.getElementById("sinkron-filter");
     const preview = document.getElementById("sinkron-preview");
+    const referenceLoading = document.getElementById("sinkron-reference-loading");
     if (!form || !preview) return;
+    let referenceToken = 0;
+
+    function updatePreviewButton() {
+      const button = document.getElementById("preview-button");
+      if (!button) return;
+      const referenceError = document.getElementById("sinkron-reference-error");
+      button.disabled = !referenceLoading?.classList.contains("hidden")
+        || !referenceError?.classList.contains("hidden")
+        || Array.from(form.querySelectorAll("[required]")).some((field) =>
+          field.disabled || !field.value
+        );
+    }
+
     form.addEventListener("change", function () {
       preview.innerHTML = '<div class="rounded-lg border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500">Filter berubah. Jalankan preview kembali.</div>';
+      updatePreviewButton();
     });
     form.addEventListener("change", function (event) {
       if (!event.target.matches("select[name='tahun'], select[name='semester'], select[name='kelas_id'], select[name='kategori_nilai_id']")) return;
       const referenceOptions = document.getElementById("sinkron-reference-options");
       const error = document.getElementById("sinkron-reference-error");
       if (!referenceOptions || !window.htmx) return;
+      htmx.trigger(referenceOptions, "htmx:abort");
+      referenceToken += 1;
       error.classList.add("hidden");
+      referenceLoading?.classList.remove("hidden");
       htmx.ajax("GET", "/sinkron-penilaian/reference-options", {
         source: referenceOptions,
         target: referenceOptions,
         swap: "innerHTML",
-        values: Object.fromEntries(new FormData(form))
+        values: { ...Object.fromEntries(new FormData(form)), reference_token: referenceToken }
       });
     });
     document.body.addEventListener("htmx:beforeRequest", function (event) {
@@ -78,9 +97,25 @@
     });
     document.body.addEventListener("htmx:afterRequest", function (event) {
       if (!form.contains(event.detail.elt)) return;
-      form.querySelectorAll("button").forEach((button) => button.disabled = false);
+      const token = Number(event.detail.requestConfig?.parameters?.reference_token);
+      const isReferenceRequest = event.detail.target?.id === "sinkron-reference-options";
+      if (!isReferenceRequest || token === referenceToken) {
+        form.querySelectorAll("button").forEach((button) => button.disabled = false);
+      }
+      if (isReferenceRequest && token === referenceToken) {
+        referenceLoading?.classList.add("hidden");
+        updatePreviewButton();
+      }
     });
     document.body.addEventListener("htmx:beforeSwap", function (event) {
+      if (event.detail.target?.id === "sinkron-reference-options") {
+        const document = new DOMParser().parseFromString(event.detail.xhr.responseText, "text/html");
+        const responseToken = Number(document.querySelector("[data-reference-token]")?.dataset.referenceToken);
+        if (responseToken !== referenceToken) {
+          event.detail.shouldSwap = false;
+          return;
+        }
+      }
       if (event.detail.target !== preview || event.detail.xhr.status < 400) return;
       event.detail.shouldSwap = true;
       event.detail.isError = false;
@@ -90,7 +125,10 @@
       const error = document.getElementById("sinkron-reference-error");
       error.textContent = "Gagal memuat kategori dan jenis penilaian. Coba lagi.";
       error.classList.remove("hidden");
+      referenceLoading?.classList.add("hidden");
+      updatePreviewButton();
     });
+    updatePreviewButton();
   })();
 </script>
 {% endblock %}
