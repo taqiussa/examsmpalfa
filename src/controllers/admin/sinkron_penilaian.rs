@@ -1,4 +1,8 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Display,
+    str::FromStr,
+};
 
 use axum::{
     Form,
@@ -6,7 +10,7 @@ use axum::{
     http::{HeaderMap, HeaderValue, StatusCode},
     response::{Html, IntoResponse, Response},
 };
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de};
 use sqlx::MySqlPool;
 use tera::Context;
 
@@ -26,15 +30,41 @@ use crate::{
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct SinkronFilter {
     pub tahun: Option<String>,
+    #[serde(deserialize_with = "deserialize_optional_number")]
     pub semester: Option<u8>,
+    #[serde(deserialize_with = "deserialize_optional_number")]
     pub kelas_id: Option<i64>,
+    #[serde(deserialize_with = "deserialize_optional_number")]
     pub mata_pelajaran_id: Option<i64>,
+    #[serde(deserialize_with = "deserialize_optional_number")]
     pub ujian_id: Option<i64>,
+    #[serde(deserialize_with = "deserialize_optional_number")]
     pub kategori_nilai_id: Option<i64>,
+    #[serde(deserialize_with = "deserialize_optional_number")]
     pub jenis_penilaian_id: Option<i64>,
     /// Monotonic client-side request token used only to prevent stale HTMX
     /// reference responses from replacing newer form state.
+    #[serde(deserialize_with = "deserialize_optional_number")]
     pub reference_token: Option<u64>,
+}
+
+/// Deserializes HTML form/query number fields where an unselected `<select>`
+/// is submitted as an empty string. Invalid non-empty values remain errors so
+/// Axum can safely reject malformed requests before the handler runs.
+fn deserialize_optional_number<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: FromStr,
+    T::Err: Display,
+{
+    let value = Option::<String>::deserialize(deserializer)?;
+
+    value
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| value.parse::<T>().map_err(de::Error::custom))
+        .transpose()
 }
 
 #[derive(Serialize)]
