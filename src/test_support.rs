@@ -367,6 +367,16 @@ async fn init_schema(pool: &MySqlPool) {
             updated_at TIMESTAMP NULL
         );
 
+        CREATE TABLE kunci_nilais (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            tahun VARCHAR(15) NOT NULL,
+            semester VARCHAR(3) NOT NULL,
+            tingkat TINYINT NOT NULL,
+            is_active TINYINT NOT NULL DEFAULT 0,
+            created_at TIMESTAMP NULL,
+            updated_at TIMESTAMP NULL
+        );
+
         CREATE TABLE penilaians (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             tanggal DATE,
@@ -384,6 +394,21 @@ async fn init_schema(pool: &MySqlPool) {
             UNIQUE KEY penilaians_unique
                 (nis, tahun, semester, kelas_id, mata_pelajaran_id,
                  kategori_nilai_id, jenis_penilaian_id)
+        );
+
+        CREATE TABLE nilai_rapors (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            tahun VARCHAR(15) NOT NULL,
+            semester VARCHAR(3) NOT NULL,
+            kelas_id TINYINT UNSIGNED NOT NULL,
+            mata_pelajaran_id TINYINT UNSIGNED NOT NULL,
+            user_id BIGINT UNSIGNED NOT NULL,
+            nis MEDIUMINT UNSIGNED,
+            nilai INT,
+            created_at TIMESTAMP NULL,
+            updated_at TIMESTAMP NULL,
+            UNIQUE KEY nilai_rapor_unique
+                (tahun, semester, kelas_id, mata_pelajaran_id, nis)
         );
     "#;
 

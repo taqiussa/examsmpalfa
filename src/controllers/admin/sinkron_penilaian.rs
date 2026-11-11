@@ -11,7 +11,7 @@ use axum::{
     response::{Html, IntoResponse, Response},
 };
 use serde::{Deserialize, Deserializer, Serialize, de};
-use sqlx::MySqlPool;
+use sqlx::{MySqlConnection, MySqlPool};
 use tera::Context;
 
 use crate::{
@@ -199,6 +199,12 @@ struct SourceUjian {
     mata_pelajaran_id: i64,
 }
 
+#[derive(sqlx::FromRow)]
+struct RaporScore {
+    nis: u32,
+    total_nilai: i64,
+}
+
 pub async fn sinkron_penilaian_page(
     ctx: PageContext,
     Query(filter): Query<SinkronFilter>,
@@ -317,6 +323,44 @@ pub async fn sinkron_execute(
         }
     };
 
+    // Laravel checks the grade lock before it writes. Do the same check inside
+    // this transaction so a lock enabled after preview cannot allow a partial
+    // sync to proceed.
+    let grade_lock = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT is_active
+        FROM kunci_nilais
+        WHERE tahun = ? AND semester = ? AND tingkat = ?
+        LIMIT 1 FOR UPDATE
+        "#,
+    )
+    .bind(&validated.tahun)
+    .bind(validated.semester.to_string())
+    .bind(validated.tingkat)
+    .fetch_optional(&mut *tx)
+    .await;
+
+    match grade_lock {
+        Ok(Some(false)) => {
+            let _ = tx.rollback().await;
+            return render_preview_error(
+                &ctx,
+                StatusCode::CONFLICT,
+                "Nilai telah dikunci. Hubungi Kurikulum untuk membuka kunci nilai.",
+            );
+        }
+        Ok(_) => {}
+        Err(error) => {
+            eprintln!("ERROR check sinkron grade lock: {error:?}");
+            let _ = tx.rollback().await;
+            return render_preview_error(
+                &ctx,
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Gagal memeriksa kunci nilai.",
+            );
+        }
+    }
+
     let reference_lock = sqlx::query_scalar::<_, i64>(
         r#"
         SELECT CAST(id AS SIGNED)
@@ -342,6 +386,40 @@ pub async fn sinkron_execute(
             "Referensi penilaian berubah. Muat ulang pilihan lalu preview kembali.",
         );
     }
+
+    let rapor_type_ids = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT CAST(id AS SIGNED)
+        FROM penilaian_rapors
+        WHERE tahun = ? AND semester = ? AND tingkat = ?
+        FOR UPDATE
+        "#,
+    )
+    .bind(&validated.tahun)
+    .bind(validated.semester.to_string())
+    .bind(validated.tingkat)
+    .fetch_all(&mut *tx)
+    .await;
+    let rapor_type_count = match rapor_type_ids {
+        Ok(ids) if !ids.is_empty() => ids.len() as i64,
+        Ok(_) => {
+            let _ = tx.rollback().await;
+            return render_preview_error(
+                &ctx,
+                StatusCode::CONFLICT,
+                "Penilaian rapor belum diatur untuk tahun, semester, dan tingkat ini.",
+            );
+        }
+        Err(error) => {
+            eprintln!("ERROR count sinkron rapor types: {error:?}");
+            let _ = tx.rollback().await;
+            return render_preview_error(
+                &ctx,
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Gagal membaca konfigurasi penilaian rapor.",
+            );
+        }
+    };
 
     for row in rows
         .iter_mut()
@@ -391,6 +469,18 @@ pub async fn sinkron_execute(
         }
     }
 
+    if let Err(error) =
+        recalculate_nilai_rapors(&mut tx, &validated, rapor_type_count, ctx.user.id).await
+    {
+        eprintln!("ERROR recalculate sinkron nilai rapor: {error:?}");
+        let _ = tx.rollback().await;
+        return render_preview_error(
+            &ctx,
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Sinkronisasi gagal menghitung nilai rapor; seluruh perubahan batch dibatalkan.",
+        );
+    }
+
     if let Err(error) = tx.commit().await {
         eprintln!("ERROR commit sinkron penilaian: {error:?}");
         return render_preview_error(
@@ -411,6 +501,67 @@ pub async fn sinkron_execute(
             summary.insert, summary.update, summary.unchanged
         )),
     )
+}
+
+/// Reproduces `InputNilaiSimpanController`: the denominator is every report
+/// assessment configured for the class level, while the numerator is all of a
+/// student's assessment scores for this period and subject. Laravel deliberately
+/// does not filter that relation by `kelas_id`, so neither do we here.
+async fn recalculate_nilai_rapors(
+    connection: &mut MySqlConnection,
+    context: &ValidatedContext,
+    rapor_type_count: i64,
+    user_id: u64,
+) -> Result<(), sqlx::Error> {
+    let scores = sqlx::query_as::<_, RaporScore>(
+        r#"
+        SELECT s.nis, CAST(COALESCE(SUM(p.nilai), 0) AS SIGNED) AS total_nilai
+        FROM siswas s
+        LEFT JOIN penilaians p
+          ON p.nis = s.nis
+         AND p.tahun = ?
+         AND p.semester = ?
+         AND p.mata_pelajaran_id = ?
+        WHERE s.tahun = ? AND s.kelas_id = ?
+        GROUP BY s.nis
+        FOR UPDATE
+        "#,
+    )
+    .bind(&context.tahun)
+    .bind(context.semester.to_string())
+    .bind(context.mata_pelajaran_id)
+    .bind(&context.tahun)
+    .bind(context.kelas_id)
+    .fetch_all(&mut *connection)
+    .await?;
+
+    for score in scores {
+        // `total_nilai` and the count originate from integer Laravel columns;
+        // integer division provides the same floor behavior for valid scores.
+        let nilai = score.total_nilai.div_euclid(rapor_type_count) as i32;
+        sqlx::query(
+            r#"
+            INSERT INTO nilai_rapors
+                (tahun, semester, kelas_id, mata_pelajaran_id, nis, nilai, user_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+            ON DUPLICATE KEY UPDATE
+                nilai = VALUES(nilai),
+                user_id = VALUES(user_id),
+                updated_at = NOW()
+            "#,
+        )
+        .bind(&context.tahun)
+        .bind(context.semester.to_string())
+        .bind(context.kelas_id)
+        .bind(context.mata_pelajaran_id)
+        .bind(score.nis)
+        .bind(nilai)
+        .bind(user_id)
+        .execute(&mut *connection)
+        .await?;
+    }
+
+    Ok(())
 }
 
 async fn build_preview(
@@ -1084,6 +1235,51 @@ mod tests {
         }
     }
 
+    async fn add_rapor_score(
+        db: &MySqlPool,
+        seed: &SeedData,
+        filter: &SinkronFilter,
+        nilai: i32,
+        suffix: &str,
+    ) {
+        let category_id = sqlx::query("INSERT INTO kategori_nilais (nama) VALUES (?)")
+            .bind(format!("Kategori {suffix}"))
+            .execute(db)
+            .await
+            .unwrap()
+            .last_insert_id() as i64;
+        let type_id =
+            sqlx::query("INSERT INTO jenis_penilaians (nama, kategori_nilai_id) VALUES (?, ?)")
+                .bind(format!("Jenis {suffix}"))
+                .bind(category_id)
+                .execute(db)
+                .await
+                .unwrap()
+                .last_insert_id() as i64;
+        sqlx::query(
+            "INSERT INTO penilaian_rapors (tingkat, tahun, semester, kategori_nilai_id, jenis_penilaian_id) VALUES (7, ?, '1', ?, ?)",
+        )
+        .bind(&seed.tahun)
+        .bind(category_id)
+        .bind(type_id)
+        .execute(db)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO penilaians (nis, tahun, semester, kelas_id, mata_pelajaran_id, kategori_nilai_id, jenis_penilaian_id, nilai) VALUES (?, ?, '1', ?, ?, ?, ?, ?)",
+        )
+        .bind(seed.nis.parse::<u32>().unwrap())
+        .bind(&seed.tahun)
+        .bind(filter.kelas_id)
+        .bind(filter.mata_pelajaran_id)
+        .bind(category_id)
+        .bind(type_id)
+        .bind(nilai)
+        .execute(db)
+        .await
+        .unwrap();
+    }
+
     fn page_context(seed: &SeedData) -> PageContext {
         PageContext {
             user: crate::models::auth_user::AuthUser {
@@ -1335,6 +1531,168 @@ mod tests {
         assert_eq!(summary.unchanged, 1);
         assert_eq!(summary.insert, 0);
         assert_eq!(summary.update, 0);
+        test_db.teardown().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn sync_recalculates_report_scores_with_laravel_denominator_and_floor() {
+        let Some(test_db) = TestDb::try_new().await else {
+            return;
+        };
+        let seed = seed_base_data(&test_db.pool).await;
+        let filter = seed_sync_context(&test_db.pool, &seed, 80.0).await;
+
+        add_rapor_score(&test_db.pool, &seed, &filter, 90, "2").await;
+        add_rapor_score(&test_db.pool, &seed, &filter, 70, "3").await;
+        add_rapor_score(&test_db.pool, &seed, &filter, 85, "4").await;
+        sinkron_execute(
+            page_context(&seed),
+            Extension(test_db.pool.clone()),
+            Form(filter.clone()),
+        )
+        .await;
+
+        let nilai: i32 = sqlx::query_scalar("SELECT nilai FROM nilai_rapors")
+            .fetch_one(&test_db.pool)
+            .await
+            .unwrap();
+        assert_eq!(nilai, 81);
+
+        sqlx::query("UPDATE hasil_nilais SET total_nilai = 100 WHERE ujian_id = ?")
+            .bind(filter.ujian_id)
+            .execute(&test_db.pool)
+            .await
+            .unwrap();
+        sinkron_execute(
+            page_context(&seed),
+            Extension(test_db.pool.clone()),
+            Form(filter),
+        )
+        .await;
+        let updated: i32 = sqlx::query_scalar("SELECT nilai FROM nilai_rapors")
+            .fetch_one(&test_db.pool)
+            .await
+            .unwrap();
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM nilai_rapors")
+            .fetch_one(&test_db.pool)
+            .await
+            .unwrap();
+        assert_eq!(updated, 86);
+        assert_eq!(count, 1);
+        test_db.teardown().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn sync_uses_all_configured_types_when_scores_are_missing_or_zero() {
+        let Some(test_db) = TestDb::try_new().await else {
+            return;
+        };
+        let seed = seed_base_data(&test_db.pool).await;
+        let filter = seed_sync_context(&test_db.pool, &seed, 80.0).await;
+        add_rapor_score(&test_db.pool, &seed, &filter, 90, "2").await;
+        for suffix in ["3", "4"] {
+            let category_id = sqlx::query("INSERT INTO kategori_nilais (nama) VALUES (?)")
+                .bind(format!("Kategori {suffix}"))
+                .execute(&test_db.pool)
+                .await
+                .unwrap()
+                .last_insert_id() as i64;
+            let type_id =
+                sqlx::query("INSERT INTO jenis_penilaians (nama, kategori_nilai_id) VALUES (?, ?)")
+                    .bind(format!("Jenis {suffix}"))
+                    .bind(category_id)
+                    .execute(&test_db.pool)
+                    .await
+                    .unwrap()
+                    .last_insert_id() as i64;
+            sqlx::query("INSERT INTO penilaian_rapors (tingkat, tahun, semester, kategori_nilai_id, jenis_penilaian_id) VALUES (7, ?, '1', ?, ?)")
+                .bind(&seed.tahun)
+                .bind(category_id)
+                .bind(type_id)
+                .execute(&test_db.pool)
+                .await
+                .unwrap();
+        }
+        // Four configured types but only two submitted scores: 170 / 4.
+        sinkron_execute(
+            page_context(&seed),
+            Extension(test_db.pool.clone()),
+            Form(filter),
+        )
+        .await;
+        let nilai: i32 = sqlx::query_scalar("SELECT nilai FROM nilai_rapors")
+            .fetch_one(&test_db.pool)
+            .await
+            .unwrap();
+        assert_eq!(nilai, 42);
+        test_db.teardown().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn sync_includes_zero_scores_in_report_calculation() {
+        let Some(test_db) = TestDb::try_new().await else {
+            return;
+        };
+        let seed = seed_base_data(&test_db.pool).await;
+        let filter = seed_sync_context(&test_db.pool, &seed, 0.0).await;
+        add_rapor_score(&test_db.pool, &seed, &filter, 80, "2").await;
+        add_rapor_score(&test_db.pool, &seed, &filter, 90, "3").await;
+        add_rapor_score(&test_db.pool, &seed, &filter, 70, "4").await;
+
+        sinkron_execute(
+            page_context(&seed),
+            Extension(test_db.pool.clone()),
+            Form(filter),
+        )
+        .await;
+        let nilai: i32 = sqlx::query_scalar("SELECT nilai FROM nilai_rapors")
+            .fetch_one(&test_db.pool)
+            .await
+            .unwrap();
+        assert_eq!(nilai, 60);
+        test_db.teardown().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn locked_scores_reject_sync_without_writes() {
+        let Some(test_db) = TestDb::try_new().await else {
+            return;
+        };
+        let seed = seed_base_data(&test_db.pool).await;
+        let filter = seed_sync_context(&test_db.pool, &seed, 80.0).await;
+        sqlx::query(
+            "INSERT INTO kunci_nilais (tahun, semester, tingkat, is_active) VALUES (?, '1', 7, 0)",
+        )
+        .bind(&seed.tahun)
+        .execute(&test_db.pool)
+        .await
+        .unwrap();
+
+        let response = sinkron_execute(
+            page_context(&seed),
+            Extension(test_db.pool.clone()),
+            Form(filter),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        assert_eq!(
+            sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM penilaians")
+                .fetch_one(&test_db.pool)
+                .await
+                .unwrap(),
+            0
+        );
+        assert_eq!(
+            sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM nilai_rapors")
+                .fetch_one(&test_db.pool)
+                .await
+                .unwrap(),
+            0
+        );
         test_db.teardown().await;
     }
 
