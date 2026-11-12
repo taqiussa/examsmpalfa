@@ -44,15 +44,6 @@
                                 </select>
                         </div>
                         <div>
-                                <label class="block text-xs text-slate-600 mb-1">Sesi</label>
-                                <select name="sesi" class="input">
-                                        <option value="1" {% if data.sesi==1 %}selected{% endif %}>1</option>
-                                        <option value="2" {% if data.sesi==2 %}selected{% endif %}>2</option>
-                                        <option value="3" {% if data.sesi==3 %}selected{% endif %}>3</option>
-                                        <option value="4" {% if data.sesi==4 %}selected{% endif %}>4</option>
-                                </select>
-                        </div>
-                        <div>
                                 <label class="block text-xs text-slate-600 mb-1">Gelombang</label>
                                 <select name="gelombang" class="input">
                                         <option value="0" {% if data.gelombang==0 %}selected{% endif %}>Semua Gelombang
@@ -61,6 +52,15 @@
                                         <option value="2" {% if data.gelombang==2 %}selected{% endif %}>2</option>
                                         <option value="3" {% if data.gelombang==3 %}selected{% endif %}>3</option>
                                         <option value="4" {% if data.gelombang==4 %}selected{% endif %}>4</option>
+                                </select>
+                        </div>
+                        <div>
+                                <label class="block text-xs text-slate-600 mb-1">Sesi</label>
+                                <select name="sesi" class="input">
+                                        <option value="1" {% if data.sesi==1 %}selected{% endif %}>1</option>
+                                        <option value="2" {% if data.sesi==2 %}selected{% endif %}>2</option>
+                                        <option value="3" {% if data.sesi==3 %}selected{% endif %}>3</option>
+                                        <option value="4" {% if data.sesi==4 %}selected{% endif %}>4</option>
                                 </select>
                         </div>
                         <button type="submit" class="button bg-sky-600 text-white hover:bg-sky-700">
@@ -76,8 +76,8 @@
                                 {{ t.tahun | default(value=data.tahun) }}
                                 |
                                 {{ lab_label(kode=t.lab_kode | default(value="")) }}
-                                | Sesi {{ t.sesi | default(value=1) }}
                                 | Gelombang {{ t.gelombang | default(value=1) }}
+                                | Sesi {{ t.sesi | default(value=1) }}
                         </div>
                         <div class="text-xs text-slate-500">
                                 Dibuat: {{ t.created_at | default(value="-") }}
@@ -147,8 +147,8 @@
                                                 {{ h.tahun | default(value=data.tahun) }}
                                                 /
                                                 {{ lab_label(kode=h.lab_kode | default(value="")) }}
-                                                / S{{ h.sesi | default(value=1) }}
                                                 / G{{ h.gelombang | default(value=1) }}
+                                                / S{{ h.sesi | default(value=1) }}
                                         </td>
                                         <td class="border px-2 py-1 text-center">
                                                 {% if h.status == "submitted" %}

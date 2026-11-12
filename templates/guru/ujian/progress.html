@@ -44,15 +44,6 @@
                                 {% include "components/lab-options.html" %}
                         </select>
                 </div>
-                <div class="min-w-[120px]">
-                        <label class="block text-sm text-slate-600 mb-1">Sesi</label>
-                        <select name="sesi" class="input">
-                                <option value="1" {% if data.sesi==1 %}selected{% endif %}>1</option>
-                                <option value="2" {% if data.sesi==2 %}selected{% endif %}>2</option>
-                                <option value="3" {% if data.sesi==3 %}selected{% endif %}>3</option>
-                                <option value="4" {% if data.sesi==4 %}selected{% endif %}>4</option>
-                        </select>
-                </div>
                 <div class="min-w-[140px]">
                         <label class="block text-sm text-slate-600 mb-1">Gelombang</label>
                         <select name="gelombang" class="input">
@@ -62,6 +53,15 @@
                                 <option value="2" {% if data.gelombang==2 %}selected{% endif %}>2</option>
                                 <option value="3" {% if data.gelombang==3 %}selected{% endif %}>3</option>
                                 <option value="4" {% if data.gelombang==4 %}selected{% endif %}>4</option>
+                        </select>
+                </div>
+                <div class="min-w-[120px]">
+                        <label class="block text-sm text-slate-600 mb-1">Sesi</label>
+                        <select name="sesi" class="input">
+                                <option value="1" {% if data.sesi==1 %}selected{% endif %}>1</option>
+                                <option value="2" {% if data.sesi==2 %}selected{% endif %}>2</option>
+                                <option value="3" {% if data.sesi==3 %}selected{% endif %}>3</option>
+                                <option value="4" {% if data.sesi==4 %}selected{% endif %}>4</option>
                         </select>
                 </div>
         </form>

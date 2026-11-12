@@ -138,7 +138,6 @@ struct UjianOptionsData {
 enum SyncStatus {
     Insert,
     Update,
-    Unchanged,
     Skipped,
     Conflict,
 }
@@ -164,7 +163,6 @@ struct PreviewRow {
 struct PreviewSummary {
     insert: usize,
     update: usize,
-    unchanged: usize,
     skipped: usize,
     conflict: usize,
     writable: usize,
@@ -426,6 +424,50 @@ pub async fn sinkron_execute(
         .iter_mut()
         .filter(|row| matches!(row.status, SyncStatus::Insert | SyncStatus::Update))
     {
+        let target_count = sqlx::query_scalar::<_, i64>(
+            r#"
+            SELECT COUNT(*)
+            FROM penilaians
+            WHERE nis = ? AND tahun = ? AND semester = ? AND kelas_id = ?
+              AND mata_pelajaran_id = ? AND kategori_nilai_id = ?
+              AND jenis_penilaian_id = ?
+            FOR UPDATE
+            "#,
+        )
+        .bind(row.nis_numeric)
+        .bind(&validated.tahun)
+        .bind(validated.semester.to_string())
+        .bind(validated.kelas_id)
+        .bind(validated.mata_pelajaran_id)
+        .bind(validated.kategori_nilai_id)
+        .bind(validated.jenis_penilaian_id)
+        .fetch_one(&mut *tx)
+        .await;
+
+        let target_count = match target_count {
+            Ok(count) => count,
+            Err(error) => {
+                eprintln!("ERROR lock sinkron target score: {error:?}");
+                let _ = tx.rollback().await;
+                return render_preview_error(
+                    &ctx,
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Sinkronisasi gagal; seluruh perubahan batch dibatalkan.",
+                );
+            }
+        };
+        match target_count {
+            0 => row.status = SyncStatus::Insert,
+            1 => row.status = SyncStatus::Update,
+            _ => {
+                row.status = SyncStatus::Conflict;
+                row.alasan = Some(
+                    "Lebih dari satu record target memiliki identitas akademik yang sama.".into(),
+                );
+                continue;
+            }
+        }
+
         let result = sqlx::query(
             r#"
             INSERT INTO penilaians
@@ -433,8 +475,8 @@ pub async fn sinkron_execute(
                  kategori_nilai_id, jenis_penilaian_id, nilai, user_id, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
             ON DUPLICATE KEY UPDATE
-                updated_at = IF(NOT (nilai <=> VALUES(nilai)), NOW(), updated_at),
-                nilai = VALUES(nilai)
+                nilai = VALUES(nilai),
+                updated_at = NOW()
             "#,
         )
         .bind(row.nis_numeric)
@@ -450,12 +492,7 @@ pub async fn sinkron_execute(
         .await;
 
         match result {
-            Ok(result) => {
-                row.status = match result.rows_affected() {
-                    1 => SyncStatus::Insert,
-                    2 => SyncStatus::Update,
-                    _ => SyncStatus::Unchanged,
-                };
+            Ok(_) => {
                 row.nilai_target = row.nilai_sync;
             }
             Err(error) => {
@@ -498,8 +535,8 @@ pub async fn sinkron_execute(
         summary.clone(),
         true,
         Some(format!(
-            "Sinkronisasi selesai: {} INSERT, {} UPDATE, {} tidak berubah.",
-            summary.insert, summary.update, summary.unchanged
+            "Sinkronisasi selesai: {} INSERT, {} UPDATE, {} SKIPPED, {} CONFLICT.",
+            summary.insert, summary.update, summary.skipped, summary.conflict
         )),
     )
 }
@@ -673,10 +710,9 @@ async fn build_preview(
                 }
                 .into(),
             );
-        } else if let Some(sync_value) = nilai_sync {
+        } else if nilai_sync.is_some() {
             status = match target_count {
                 0 => SyncStatus::Insert,
-                1 if nilai_target == Some(sync_value) => SyncStatus::Unchanged,
                 1 => SyncStatus::Update,
                 _ => status,
             };
@@ -754,7 +790,6 @@ fn summarize(rows: &[PreviewRow]) -> PreviewSummary {
         match row.status {
             SyncStatus::Insert => summary.insert += 1,
             SyncStatus::Update => summary.update += 1,
-            SyncStatus::Unchanged => summary.unchanged += 1,
             SyncStatus::Skipped => summary.skipped += 1,
             SyncStatus::Conflict => summary.conflict += 1,
         }
@@ -1115,11 +1150,10 @@ mod tests {
     }
 
     #[test]
-    fn summary_distinguishes_all_sync_states() {
+    fn summary_distinguishes_writable_and_blocked_sync_states() {
         let statuses = [
             SyncStatus::Insert,
             SyncStatus::Update,
-            SyncStatus::Unchanged,
             SyncStatus::Skipped,
             SyncStatus::Conflict,
         ];
@@ -1144,7 +1178,6 @@ mod tests {
         let summary = summarize(&rows);
         assert_eq!(summary.insert, 1);
         assert_eq!(summary.update, 1);
-        assert_eq!(summary.unchanged, 1);
         assert_eq!(summary.skipped, 1);
         assert_eq!(summary.conflict, 1);
         assert_eq!(summary.writable, 2);
@@ -1573,12 +1606,12 @@ mod tests {
 
     #[tokio::test]
     #[serial]
-    async fn execute_inserts_updates_and_then_becomes_unchanged_without_duplicates() {
+    async fn execute_force_upserts_equal_lower_and_zero_scores_without_duplicates() {
         let Some(test_db) = TestDb::try_new().await else {
             return;
         };
         let seed = seed_base_data(&test_db.pool).await;
-        let filter = seed_sync_context(&test_db.pool, &seed, 0.0).await;
+        let filter = seed_sync_context(&test_db.pool, &seed, 80.0).await;
 
         let response = sinkron_execute(
             page_context(&seed),
@@ -1587,14 +1620,47 @@ mod tests {
         )
         .await;
         assert_eq!(response.status(), StatusCode::OK);
-        let stored: (i32, u32, i64) =
-            sqlx::query_as("SELECT nilai, nis, COUNT(*) OVER () FROM penilaians LIMIT 1")
+        let stored: (u64, i32, u32, i64) =
+            sqlx::query_as("SELECT id, nilai, nis, COUNT(*) OVER () FROM penilaians LIMIT 1")
                 .fetch_one(&test_db.pool)
                 .await
                 .unwrap();
-        assert_eq!(stored, (0, seed.nis.parse().unwrap(), 1));
+        assert_eq!(stored.1, 80);
+        assert_eq!(stored.2, seed.nis.parse::<u32>().unwrap());
+        assert_eq!(stored.3, 1);
 
-        sqlx::query("UPDATE hasil_nilais SET total_nilai = 91 WHERE ujian_id = ?")
+        sqlx::query(
+            "UPDATE penilaians SET created_at = '2000-01-01 00:00:00', updated_at = '2000-01-01 00:00:00'",
+        )
+        .execute(&test_db.pool)
+        .await
+        .unwrap();
+        let (_, summary, _) = build_preview(&test_db.pool, &filter).await.unwrap();
+        assert_eq!(summary.insert, 0);
+        assert_eq!(summary.update, 1);
+
+        let response = sinkron_execute(
+            page_context(&seed),
+            Extension(test_db.pool.clone()),
+            Form(filter.clone()),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let timestamps: (String, String) = sqlx::query_as(
+            "SELECT CAST(created_at AS CHAR), CAST(updated_at AS CHAR) FROM penilaians",
+        )
+        .fetch_one(&test_db.pool)
+        .await
+        .unwrap();
+        assert_eq!(timestamps.0, "2000-01-01 00:00:00");
+        assert_ne!(timestamps.1, "2000-01-01 00:00:00");
+        let persisted_id: u64 = sqlx::query_scalar("SELECT id FROM penilaians")
+            .fetch_one(&test_db.pool)
+            .await
+            .unwrap();
+        assert_eq!(persisted_id, stored.0);
+
+        sqlx::query("UPDATE hasil_nilais SET total_nilai = 90 WHERE ujian_id = ?")
             .bind(filter.ujian_id)
             .execute(&test_db.pool)
             .await
@@ -1610,12 +1676,45 @@ mod tests {
             .fetch_one(&test_db.pool)
             .await
             .unwrap();
-        assert_eq!(value, 91);
+        assert_eq!(value, 90);
+
+        sqlx::query("UPDATE hasil_nilais SET total_nilai = 60 WHERE ujian_id = ?")
+            .bind(filter.ujian_id)
+            .execute(&test_db.pool)
+            .await
+            .unwrap();
+        sinkron_execute(
+            page_context(&seed),
+            Extension(test_db.pool.clone()),
+            Form(filter.clone()),
+        )
+        .await;
+        let value: i32 = sqlx::query_scalar("SELECT nilai FROM penilaians")
+            .fetch_one(&test_db.pool)
+            .await
+            .unwrap();
+        assert_eq!(value, 60);
+
+        sqlx::query("UPDATE hasil_nilais SET total_nilai = 0 WHERE ujian_id = ?")
+            .bind(filter.ujian_id)
+            .execute(&test_db.pool)
+            .await
+            .unwrap();
+        sinkron_execute(
+            page_context(&seed),
+            Extension(test_db.pool.clone()),
+            Form(filter.clone()),
+        )
+        .await;
+        let value: i32 = sqlx::query_scalar("SELECT nilai FROM penilaians")
+            .fetch_one(&test_db.pool)
+            .await
+            .unwrap();
+        assert_eq!(value, 0);
 
         let (_, summary, _) = build_preview(&test_db.pool, &filter).await.unwrap();
-        assert_eq!(summary.unchanged, 1);
         assert_eq!(summary.insert, 0);
-        assert_eq!(summary.update, 0);
+        assert_eq!(summary.update, 1);
         test_db.teardown().await;
     }
 

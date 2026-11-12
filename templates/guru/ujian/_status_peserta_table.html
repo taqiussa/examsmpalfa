@@ -8,7 +8,7 @@
       <div class="text-xs text-slate-500">
         {{ data.tahun }} |
         {{ lab_label(kode=data.lab_kode) }}
-        | Sesi {{ data.sesi }} | Gelombang {{ data.gelombang }}
+        | Gelombang {{ data.gelombang }} | Sesi {{ data.sesi }}
       </div>
     </div>
     <div class="text-sm text-slate-500">Total: {{ data.list_peserta | length }}</div>
@@ -22,8 +22,8 @@
           <th class="border px-2 py-1 text-left">Kelas</th>
           <th class="border px-2 py-1 text-left">Tahun</th>
           <th class="border px-2 py-1 text-left">Lab</th>
-          <th class="border px-2 py-1 text-center">Sesi</th>
           <th class="border px-2 py-1 text-center">Gelombang</th>
+          <th class="border px-2 py-1 text-center">Sesi</th>
           <th class="border px-2 py-1 text-center">Status</th>
           <th class="border px-2 py-1 text-center">Aksi</th>
         </tr>
@@ -38,8 +38,8 @@
           <td class="border px-2 py-1">
             {{ lab_label(kode=p.lab_kode | default(value="")) }}
           </td>
-          <td class="border px-2 py-1 text-center">{{ p.sesi | default(value=0) }}</td>
           <td class="border px-2 py-1 text-center">{{ p.gelombang | default(value=0) }}</td>
+          <td class="border px-2 py-1 text-center">{{ p.sesi | default(value=0) }}</td>
           <td class="border px-2 py-1 text-center">
             {% if p.status == "submitted" %}
             <span class="rounded bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">Submitted</span>

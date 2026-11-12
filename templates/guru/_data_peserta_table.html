@@ -6,8 +6,8 @@
                         <th class="border px-2 py-2">Nama</th>
                         <th class="border px-2 py-2">Kelas</th>
                         <th class="border px-2 py-2 text-center">Tahun</th>
-                        <th class="border px-2 py-2 text-center">Gelombang</th>
                         <th class="border px-2 py-2">Lab</th>
+                        <th class="border px-2 py-2 text-center">Gelombang</th>
                         <th class="border px-2 py-2 text-center">Sesi</th>
                 </tr>
         </thead>
@@ -22,10 +22,10 @@
                         <td class="border px-2 py-1">{{ s.nama | default(value="-") }}</td>
                         <td class="border px-2 py-1">{{ s.kelas | default(value="-") }}</td>
                         <td class="border px-2 py-1 text-center">{{ s.tahun }}</td>
-                        <td class="border px-2 py-1 text-center">{{ s.gelombang }}</td>
                         <td class="border px-2 py-1">
                                 {{ lab_label(kode=s.lab_kode) }}
                         </td>
+                        <td class="border px-2 py-1 text-center">{{ s.gelombang }}</td>
                         <td class="border px-2 py-1 text-center">{{ s.sesi }}</td>
                 </tr>
                 {% else %}
