@@ -315,7 +315,7 @@ async fn init_schema(pool: &MySqlPool) {
 
         CREATE TABLE ujians (
             id BIGINT AUTO_INCREMENT PRIMARY KEY,
-            mata_pelajaran_id BIGINT NOT NULL,
+            mata_pelajaran_id BIGINT UNSIGNED NOT NULL,
             user_id BIGINT UNSIGNED,
             tahun VARCHAR(20) NOT NULL,
             title VARCHAR(255) NOT NULL,

@@ -90,6 +90,7 @@ struct SinkronPageData {
 #[derive(Clone, Serialize, sqlx::FromRow)]
 struct SinkronUjianOption {
     id: i64,
+    mata_pelajaran_id: i64,
     title: String,
     mata_pelajaran: String,
     tahun: String,
@@ -194,7 +195,7 @@ struct ValidatedContext {
     jenis_penilaian_id: i64,
 }
 
-#[derive(sqlx::FromRow)]
+#[derive(Debug, sqlx::FromRow)]
 struct SourceUjian {
     mata_pelajaran_id: i64,
 }
@@ -788,7 +789,12 @@ async fn fetch_class_level(db: &MySqlPool, kelas_id: i64) -> Result<u8, String> 
 async fn fetch_sinkron_ujian_options(db: &MySqlPool) -> Vec<SinkronUjianOption> {
     sqlx::query_as::<_, SinkronUjianOption>(
         r#"
-        SELECT u.id, u.title, COALESCE(mp.nama, '-') AS mata_pelajaran, u.tahun
+        SELECT
+            u.id,
+            CAST(u.mata_pelajaran_id AS SIGNED) AS mata_pelajaran_id,
+            u.title,
+            COALESCE(mp.nama, '-') AS mata_pelajaran,
+            u.tahun
         FROM ujians u
         LEFT JOIN mata_pelajarans mp ON mp.id = u.mata_pelajaran_id
         ORDER BY u.tanggal DESC, u.id DESC
@@ -806,17 +812,28 @@ async fn validate_sinkron_ujian(
     db: &MySqlPool,
     ujian_id: i64,
 ) -> Result<SourceUjian, (StatusCode, String)> {
-    sqlx::query_as::<_, SourceUjian>("SELECT mata_pelajaran_id FROM ujians WHERE id = ? LIMIT 1")
-        .bind(ujian_id)
-        .fetch_optional(db)
-        .await
-        .map_err(internal_error("memvalidasi ujian"))?
-        .ok_or_else(|| {
-            (
-                StatusCode::BAD_REQUEST,
-                "Ujian yang dipilih tidak ditemukan.".into(),
-            )
-        })
+    // The Laravel schema defines this column as BIGINT UNSIGNED while the
+    // request and synchronization context use i64. Cast at the SQL boundary
+    // so SQLx receives a signed value; normal application IDs are safely
+    // within the signed BIGINT range.
+    sqlx::query_as::<_, SourceUjian>(
+        r#"
+        SELECT CAST(mata_pelajaran_id AS SIGNED) AS mata_pelajaran_id
+        FROM ujians
+        WHERE id = ?
+        LIMIT 1
+        "#,
+    )
+    .bind(ujian_id)
+    .fetch_optional(db)
+    .await
+    .map_err(internal_error("memvalidasi ujian"))?
+    .ok_or_else(|| {
+        (
+            StatusCode::BAD_REQUEST,
+            "Ujian yang dipilih tidak ditemukan.".into(),
+        )
+    })
 }
 
 async fn fetch_sinkron_nilai_kelas_rows(
@@ -1316,6 +1333,74 @@ mod tests {
         filter.jenis_penilaian_id = Some(999);
         let error = build_preview(&test_db.pool, &filter).await.unwrap_err();
         assert_eq!(error.0, StatusCode::BAD_REQUEST);
+        test_db.teardown().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn exam_validator_decodes_unsigned_subject_id() {
+        let Some(test_db) = TestDb::try_new().await else {
+            return;
+        };
+        let seed = seed_base_data(&test_db.pool).await;
+        let filter = seed_sync_context(&test_db.pool, &seed, 83.0).await;
+
+        let source = validate_sinkron_ujian(&test_db.pool, filter.ujian_id.unwrap())
+            .await
+            .unwrap();
+        assert_eq!(source.mata_pelajaran_id, filter.mata_pelajaran_id.unwrap());
+        test_db.teardown().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn exam_validator_remains_compatible_with_signed_subject_id() {
+        let Some(test_db) = TestDb::try_new().await else {
+            return;
+        };
+        sqlx::query("ALTER TABLE ujians MODIFY mata_pelajaran_id BIGINT NOT NULL")
+            .execute(&test_db.pool)
+            .await
+            .unwrap();
+        let seed = seed_base_data(&test_db.pool).await;
+        let filter = seed_sync_context(&test_db.pool, &seed, 83.0).await;
+
+        let source = validate_sinkron_ujian(&test_db.pool, filter.ujian_id.unwrap())
+            .await
+            .unwrap();
+        assert_eq!(source.mata_pelajaran_id, filter.mata_pelajaran_id.unwrap());
+        test_db.teardown().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn exam_validator_returns_bad_request_when_exam_is_missing() {
+        let Some(test_db) = TestDb::try_new().await else {
+            return;
+        };
+
+        let error = validate_sinkron_ujian(&test_db.pool, 999)
+            .await
+            .unwrap_err();
+        assert_eq!(error.0, StatusCode::BAD_REQUEST);
+        assert_eq!(error.1, "Ujian yang dipilih tidak ditemukan.");
+        test_db.teardown().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn exam_validator_returns_safe_error_for_database_failure() {
+        let Some(test_db) = TestDb::try_new().await else {
+            return;
+        };
+        sqlx::query("DROP TABLE ujians")
+            .execute(&test_db.pool)
+            .await
+            .unwrap();
+
+        let error = validate_sinkron_ujian(&test_db.pool, 1).await.unwrap_err();
+        assert_eq!(error.0, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(error.1, "Gagal memvalidasi ujian.");
         test_db.teardown().await;
     }
 
